@@ -11,7 +11,7 @@ export function equityShare(p: Product): number {
   if (p.equityPct != null) return p.equityPct / 100;
   if (p.assetClass === 'Renta Variable') return 1;
   if (p.assetClass === 'Renta Fija') return 0;
-  const m = /(\d{2})%\s*Equity/i.exec(p.name); // e.g. Vanguard LifeStrategy 60% Equity
+  const m = /(\d{2})%\s*Equity/i.exec(p.name) ?? /LifeStrategy\s*(\d{2})/i.exec(p.name); // Vanguard LifeStrategy 60% Equity
   return m ? Number(m[1]) / 100 : 0.5;
 }
 

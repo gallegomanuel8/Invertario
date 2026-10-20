@@ -46,6 +46,7 @@ Code map: `src/styles.css` (all styles + tokens), `src/components/Catalog.tsx`, 
 
 ### Privacy & trust (non-negotiable)
 - Portfolio data stays in the browser: no analytics, fonts, CDNs, error trackers or `fetch` calls that could carry holdings. If a feature would need a server, stop and ask the user.
+- The one approved exception (user decision, 2026-10-20): `GET /api/fund?isin=` (Vercel function in `api/`, scraping FT.com with OpenFIGI fallback) runs automatically for holdings missing from the catalog. It may send **only the ISIN** — never amounts, dates or lots — and the privacy note on «Mi cartera» must keep saying so.
 - Keep the privacy note visible near the importer and the "Borrar mis datos" action reachable.
 - Never seed screenshots, fixtures or commits with the real CSVs in `csv de ejemplo/` (gitignored personal data). Use `assets/demo-portfolio.json` / `assets/demo-sims.json`.
 - Show data provenance: the catalog must keep crediting the community spreadsheet and showing when data was last updated. Investment info is orientative — keep the "no constituye asesoramiento" footer.

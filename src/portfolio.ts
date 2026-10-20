@@ -1,5 +1,7 @@
 // Parsing and browser-only storage of "Plusvalías y minusvalías" CSV exports.
-// Nothing here ever leaves the browser.
+// Holdings never leave the browser; only the ISIN of funds missing from the catalog is looked up (see lookupFundInfo).
+import type { FundInfo } from '../api/_ft';
+import type { Product } from './types';
 
 export interface Lot {
   date: string; // ISO yyyy-mm-dd (fecha fiscal de la suscripción)
@@ -13,6 +15,8 @@ export interface Holding {
   fileName: string;
   importedAt: string;
   name?: string; // user-given name for funds not in the catalog
+  info?: FundInfo | null; // looked up by ISIN for funds not in the catalog (null = not found)
+  infoCheckedAt?: string;
   lots: Lot[];
 }
 
@@ -76,4 +80,25 @@ export function totals(lots: Lot[]) {
   const value = sum(lots.map((l) => l.value));
   const result = value - invested;
   return { invested, value, result, pct: invested ? (result / invested) * 100 : 0 };
+}
+
+/** Asks our /api/fund endpoint (FT.com behind it) about a fund. Sends only the ISIN. */
+export async function lookupFundInfo(isin: string): Promise<FundInfo | null> {
+  const res = await fetch(`/api/fund?isin=${encodeURIComponent(isin)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return (await res.json()) as FundInfo;
+}
+
+const RETRY_MS = 7 * 86_400_000;
+/** Funds missing from the catalog that were never looked up, or whose lookup failed over a week ago. */
+export const needsLookup = (h: Holding, inCatalog: boolean) =>
+  !inCatalog && (h.info === undefined || (h.info === null && Date.now() - new Date(h.infoCheckedAt ?? 0).getTime() > RETRY_MS));
+
+/** Catalog-shaped product built from looked-up data, so costs and asset type work like catalog funds. */
+export function externalProduct(info: FundInfo): Product {
+  return {
+    id: `ext-${info.isin}`, type: 'fondo', isin: info.isin, name: info.name,
+    assetClass: info.assetClass, region: info.category, totalCost: info.ongoingCharge, ter: info.ongoingCharge, addedAt: null,
+  };
 }

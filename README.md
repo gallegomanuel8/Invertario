@@ -9,6 +9,8 @@ Web sencilla para consultar fondos indexados, ETFs y planes de pensiones disponi
 - **Simulador**: crea carteras simuladas con fondos del catálogo (desde su ficha o con el buscador) y proyecta su valor con interés compuesto: capital inicial, aportación mensual con subida anual, plazo, inflación, objetivo, costes reales de cada fondo e hipótesis de rentabilidad (prudente, histórica 5 años o personalizada), con escenarios favorable/desfavorable, tabla anual y exportación CSV. Se guardan solo en el navegador.
 - **Mi cartera**: importa los CSV de plusvalías/minusvalías (uno por fondo, con el ISIN en el nombre del archivo). Todo se procesa y guarda en el navegador (`localStorage`); no hay backend ni se envía nada a ningún servidor.
 
+- **Fondos no catalogados**: al importar un CSV de un fondo que no está en el catálogo, la web consulta automáticamente `GET /api/fund?isin=…` (función serverless en `api/`, que lee la ficha pública de FT.com y, si no la encuentra, OpenFIGI) para obtener nombre, categoría, gastos corrientes y tipo de activo. Solo se envía el ISIN; el resultado se guarda en el navegador.
+
 ## Actualización diaria
 
 `.github/workflows/sync-funds.yml` se ejecuta cada día (05:30 UTC) y también manualmente desde la pestaña *Actions*:

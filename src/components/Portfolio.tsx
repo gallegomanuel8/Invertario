@@ -1,10 +1,13 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { byIsin, cheaperAlternative } from '../data';
 import { fmtDate, fmtEur, fmtEur0, fmtPct, fmtSignedEur, fmtSignedPct } from '../format';
-import { type Holding, loadHoldings, parseHoldingCsv, saveHoldings, sum, totals } from '../portfolio';
+import { externalProduct, type Holding, loadHoldings, lookupFundInfo, needsLookup, parseHoldingCsv, saveHoldings, sum, totals } from '../portfolio';
 import { assetTypeSlices } from '../simulate';
 import { BarList, Donut, StepChart } from './Charts';
 
+
+// ISINs already looked up during this page load (module-level so remounts don't repeat requests).
+const attempted = new Set<string>();
 
 export function Portfolio() {
   const [holdings, setHoldings] = useState<Holding[]>(loadHoldings);
@@ -15,6 +18,21 @@ export function Portfolio() {
   const input = useRef<HTMLInputElement>(null);
 
   useEffect(() => saveHoldings(holdings), [holdings]);
+
+  // Identify funds missing from the catalog by ISIN (only the ISIN is sent; see lookupFundInfo).
+  const [looking, setLooking] = useState<string[]>([]);
+  useEffect(() => {
+    const pending = holdings.filter((h) => needsLookup(h, byIsin.has(h.isin)) && !attempted.has(h.isin)).map((h) => h.isin);
+    if (!pending.length) return;
+    pending.forEach((isin) => attempted.add(isin));
+    setLooking((cur) => [...cur, ...pending]);
+    for (const isin of pending) {
+      lookupFundInfo(isin)
+        .then((info) => setHoldings((cur) => cur.map((h) => (h.isin === isin ? { ...h, info, infoCheckedAt: new Date().toISOString() } : h))))
+        .catch(() => { /* offline or API down: retried on the next page load */ })
+        .finally(() => setLooking((cur) => cur.filter((i) => i !== isin)));
+    }
+  }, [holdings]);
   useEffect(() => {
     if (!removed) return;
     const t = setTimeout(() => setRemoved(null), 8000);
@@ -44,8 +62,10 @@ export function Portfolio() {
     () =>
       holdings
         .map((h) => {
-          const product = byIsin.get(h.isin);
-          return { h, product, name: product?.name ?? h.name ?? h.isin, alternative: cheaperAlternative(product), ...totals(h.lots) };
+          const catalogProduct = byIsin.get(h.isin);
+          const product = catalogProduct ?? (h.info ? externalProduct(h.info) : undefined);
+          const name = catalogProduct?.name ?? h.name ?? h.info?.name ?? h.isin;
+          return { h, product, external: !catalogProduct && !!h.info, name, alternative: cheaperAlternative(catalogProduct), ...totals(h.lots) };
         })
         .sort((a, b) => b.value - a.value),
     [holdings],
@@ -113,8 +133,8 @@ export function Portfolio() {
           </p>
         </div>
         <p className="privacy">
-          <span aria-hidden>🔒</span> Tus datos se procesan y guardan <strong>solo en este navegador</strong>.
-          Nunca se envían a ningún servidor. Puedes borrarlos cuando quieras.
+          <span aria-hidden>🔒</span> Tus datos se procesan y guardan <strong>solo en este navegador</strong> y puedes borrarlos cuando quieras.
+          Para identificar fondos que no están en el catálogo se consulta <strong>solo su ISIN</strong> (vía FT.com); nunca importes ni movimientos.
         </p>
       </div>
 
@@ -213,21 +233,24 @@ export function Portfolio() {
                 </thead>
                 <tbody>
                   {rows.map((r) => {
-                    const link = r.product && `#/?f=${encodeURIComponent(r.product.id)}`;
+                    const link = r.external ? r.h.info?.url : r.product && `#/?f=${encodeURIComponent(r.product.id)}`;
                     const isOpen = open === r.h.isin;
                     return (
                       <Fragment key={r.h.isin}>
                         <tr>
                           <td data-label="Fondo" className="name-cell">
                             <div className="name">
-                              {link ? <a href={link}>{r.name}</a> : r.name}
+                              {link ? <a href={link} {...(r.external ? { target: '_blank', rel: 'noreferrer' } : {})}>{r.name}</a> : r.name}
+                              {r.external && <span className="badge-ext" title={`Datos obtenidos de ${r.h.info!.source} a partir del ISIN`}>vía {r.h.info!.source}</span>}
                             </div>
                             <div className="muted small">
                               <span className="mono">{r.h.isin}</span>
                               {r.product?.region && <span> · {r.product.region}</span>}
-                              {!r.product && (
+                              {!byIsin.has(r.h.isin) && (
                                 <span>
-                                  {' '}· No está en el catálogo ·{' '}
+                                  {' '}· {looking.includes(r.h.isin) ? 'Buscando datos del fondo…'
+                                    : r.external ? 'No está en el catálogo'
+                                    : 'No está en el catálogo ni se ha podido identificar'} ·{' '}
                                   <button className="link" onClick={() => rename(r.h.isin, r.h.name)}>
                                     {r.h.name ? 'Renombrar' : 'Ponerle nombre'}
                                   </button>
