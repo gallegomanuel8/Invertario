@@ -1,0 +1,19 @@
+[
+  {
+    "id": "demo1",
+    "name": "Global 80/20",
+    "createdAt": "2026-10-01T10:00:00.000Z",
+    "funds": [
+      { "id": "IE000ZYRH0Q7", "weight": 70 },
+      { "id": "IE000QAZP7L2", "weight": 10 },
+      { "id": "IE00BD0NC037", "weight": 20 }
+    ],
+    "initial": 5000,
+    "monthly": 300,
+    "yearlyIncrease": 2,
+    "years": 25,
+    "inflation": 2,
+    "goal": 250000,
+    "returnMode": "prudente"
+  }
+]

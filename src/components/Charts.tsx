@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { fmtDate, fmtEur } from '../format';
 
 export interface Point { date: string; value: number }
@@ -6,10 +6,22 @@ export interface Point { date: string; value: number }
 /** Single-series step-area chart with crosshair + tooltip. */
 export function StepChart({ points, label }: { points: Point[]; label: string }) {
   const [hover, setHover] = useState<number | null>(null);
+  const [width, setWidth] = useState(640);
+  const box = useRef<HTMLDivElement>(null);
   const ref = useRef<SVGSVGElement>(null);
+
+  // Draw at the real pixel width so axis text stays legible on phones instead of being scaled down.
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setWidth(Math.max(240, Math.round(entry.contentRect.width))));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [points.length >= 2]);
+
   if (points.length < 2) return null;
 
-  const W = 640, H = 220, pad = { l: 56, r: 12, t: 12, b: 28 };
+  const W = width, H = width < 480 ? 200 : 240, pad = { l: 56, r: 12, t: 12, b: 28 };
   const t0 = new Date(points[0].date).getTime();
   const t1 = Math.max(new Date(points.at(-1)!.date).getTime(), t0 + 1);
   const max = niceMax(Math.max(...points.map((p) => p.value)));
@@ -20,7 +32,7 @@ export function StepChart({ points, label }: { points: Point[]; label: string })
   for (const p of points.slice(1)) path += ` H${x(p.date)} V${y(p.value)}`;
   const area = `${path} V${y(0)} H${x(points[0].date)} Z`;
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * max);
-  const xTicks = [points[0], points[Math.floor(points.length / 2)], points.at(-1)!];
+  const xTicks = W < 420 ? [points[0], points.at(-1)!] : [points[0], points[Math.floor(points.length / 2)], points.at(-1)!];
 
   const onMove = (e: React.PointerEvent) => {
     const box = ref.current!.getBoundingClientRect();
@@ -32,8 +44,8 @@ export function StepChart({ points, label }: { points: Point[]; label: string })
   const hp = hover != null ? points[hover] : null;
 
   return (
-    <div className="chart">
-      <svg ref={ref} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label}
+    <div className="chart" ref={box}>
+      <svg ref={ref} viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label={label}
         onPointerMove={onMove} onPointerLeave={() => setHover(null)}>
         {ticks.map((t) => (
           <g key={t}>
@@ -42,7 +54,7 @@ export function StepChart({ points, label }: { points: Point[]; label: string })
           </g>
         ))}
         {xTicks.map((p, i) => (
-          <text key={i} x={x(p.date)} y={H - 8} className="axis" textAnchor={i === 0 ? 'start' : i === 2 ? 'end' : 'middle'}>
+          <text key={i} x={x(p.date)} y={H - 8} className="axis" textAnchor={i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : 'middle'}>
             {fmtDate(p.date)}
           </text>
         ))}
@@ -92,4 +104,80 @@ function niceMax(v: number) {
 
 function compactEur(v: number) {
   return new Intl.NumberFormat('es-ES', { notation: 'compact', maximumFractionDigits: 1 }).format(v) + ' €';
+}
+
+export interface BandPoint { x: number; label: string; value: number; low: number; high: number; base: number }
+
+/** Projection chart: expected line, favourable/unfavourable band and contributed baseline, with crosshair tooltip. */
+export function ProjectionChart({ points, label }: { points: BandPoint[]; label: string }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const [width, setWidth] = useState(640);
+  const box = useRef<HTMLDivElement>(null);
+  const ref = useRef<SVGSVGElement>(null);
+
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setWidth(Math.max(240, Math.round(entry.contentRect.width))));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const W = width, H = width < 480 ? 220 : 280, pad = { l: 60, r: 12, t: 12, b: 28 };
+  const n = points.length;
+  const max = niceMax(Math.max(1, ...points.map((p) => p.high)));
+  const x = (i: number) => pad.l + (n <= 1 ? 0 : (i / (n - 1)) * (W - pad.l - pad.r));
+  const y = (v: number) => pad.t + (1 - v / max) * (H - pad.t - pad.b);
+  const line = (get: (p: BandPoint) => number) => points.map((p, i) => `${i ? 'L' : 'M'}${x(i)},${y(get(p))}`).join(' ');
+  const band = `${line((p) => p.high)} ${points.map((_, i) => `L${x(n - 1 - i)},${y(points[n - 1 - i].low)}`).join(' ')} Z`;
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * max);
+  const step = Math.max(1, Math.ceil(n / (W < 480 ? 4 : 8)));
+
+  const onMove = (e: React.PointerEvent) => {
+    const rect = ref.current!.getBoundingClientRect();
+    const px = ((e.clientX - rect.left) / rect.width) * W;
+    setHover(Math.max(0, Math.min(n - 1, Math.round(((px - pad.l) / (W - pad.l - pad.r)) * (n - 1)))));
+  };
+  const hp = hover != null ? points[hover] : null;
+
+  return (
+    <div className="chart" ref={box}>
+      <ul className="legend" aria-hidden>
+        <li><span className="key key-line" />Valor esperado</li>
+        <li><span className="key key-band" />Escenarios favorable y desfavorable</li>
+        <li><span className="key key-base" />Aportado</li>
+      </ul>
+      {n > 1 && (
+        <svg ref={ref} viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label={label}
+          onPointerMove={onMove} onPointerLeave={() => setHover(null)}>
+          {ticks.map((t) => (
+            <g key={t}>
+              <line x1={pad.l} x2={W - pad.r} y1={y(t)} y2={y(t)} className="grid" />
+              <text x={pad.l - 8} y={y(t)} className="axis" textAnchor="end" dominantBaseline="middle">{compactEur(t)}</text>
+            </g>
+          ))}
+          {points.map((p, i) => ((i % step === 0 && n - 1 - i >= step * 0.6) || i === n - 1) && (
+            <text key={i} x={x(i)} y={H - 8} className="axis" textAnchor={i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}>{p.label}</text>
+          ))}
+          <path d={band} className="series-band" />
+          <path d={line((p) => p.base)} className="series-base" />
+          <path d={line((p) => p.value)} className="series-line" />
+          {hp && (
+            <g>
+              <line x1={x(hover!)} x2={x(hover!)} y1={pad.t} y2={y(0)} className="crosshair" />
+              <circle cx={x(hover!)} cy={y(hp.value)} r={5} className="series-dot" />
+            </g>
+          )}
+        </svg>
+      )}
+      {hp && (
+        <div className="tooltip" style={{ left: `${Math.min(80, Math.max(20, (x(hover!) / W) * 100))}%`, top: 40 }}>
+          <div className="muted small">{hp.label}</div>
+          <div><strong>{fmtEur(hp.value)}</strong> <span className="muted small">esperado</span></div>
+          <div className="small">{fmtEur(hp.low)} – {fmtEur(hp.high)}</div>
+          <div className="small muted">Aportado: {fmtEur(hp.base)}</div>
+        </div>
+      )}
+    </div>
+  );
 }

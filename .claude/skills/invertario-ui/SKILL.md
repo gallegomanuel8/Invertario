@@ -7,13 +7,13 @@ description: UI/UX rules and visual verification workflow for the Invertario web
 
 Invertario is a small, fast, no-backend site for Spanish retail investors: a catalog of index funds/ETFs/pension plans (from a community spreadsheet) and a private portfolio dashboard fed by CSVs that never leave the browser. Users are non-professional investors, often on mobile, comparing costs. Every design decision should make **comparing products** and **understanding my portfolio** faster, while keeping the site trustworthy and calm (it's money).
 
-Code map: `src/styles.css` (all styles + tokens), `src/components/Catalog.tsx`, `src/components/Portfolio.tsx`, `src/components/Charts.tsx`, `src/format.ts` (all number/date formatting), `src/data.ts`.
+Code map: `src/styles.css` (all styles + tokens), `src/components/Catalog.tsx`, `src/components/Portfolio.tsx`, `src/components/Charts.tsx`, `src/format.ts` (all number/date formatting), `src/data.ts`, `src/components/Simulator.tsx` + `src/simulate.ts` (projection maths) + `src/sims.ts` (simulated portfolios store).
 
 ## Workflow
 
 1. **Read before changing.** Open `src/styles.css` and the component you'll touch. Reuse existing classes and tokens (`.panel`, `.kpi`, `.chip`, `.pill`, `.tag-*`, `.btn`, `.link`, `.table-wrap`, `.muted`, `.small`, `.num`, `.pos/.neg`) before inventing new ones — consistency is most of what makes a small site feel designed.
 2. **Make the change** following the rules below.
-3. **Verify visually.** Run `bash .claude/skills/invertario-ui/scripts/screenshots.sh <dir>` and look at every PNG it prints (desktop, mobile 390px, dark mode, catalog + portfolio seeded with fictional demo data). `npm run build` passing is not verification — layout bugs (horizontal overflow on mobile, clipped labels, unreadable dark-mode colors) only show up in pixels. Fix and re-shoot until clean.
+3. **Verify visually.** Run `bash .claude/skills/invertario-ui/scripts/screenshots.sh <dir>` and look at every PNG it prints (desktop, mobile 390px, dark mode, catalog, product detail sheet, comparator, and portfolio seeded with fictional demo data). Catalog state lives in the URL hash (`#/?t=etf&f=<id>&cmp=<id>,<id>&vs=1`), so you can screenshot any state by URL. `npm run build` passing is not verification — layout bugs (horizontal overflow on mobile, clipped labels, unreadable dark-mode colors) only show up in pixels. Fix and re-shoot until clean.
 4. **Report** what changed and what you checked, mentioning anything you could not verify.
 
 ## Rules
@@ -47,7 +47,7 @@ Code map: `src/styles.css` (all styles + tokens), `src/components/Catalog.tsx`, 
 ### Privacy & trust (non-negotiable)
 - Portfolio data stays in the browser: no analytics, fonts, CDNs, error trackers or `fetch` calls that could carry holdings. If a feature would need a server, stop and ask the user.
 - Keep the privacy note visible near the importer and the "Borrar mis datos" action reachable.
-- Never seed screenshots, fixtures or commits with the real CSVs in `csv de ejemplo/` (gitignored personal data). Use `assets/demo-portfolio.json`.
+- Never seed screenshots, fixtures or commits with the real CSVs in `csv de ejemplo/` (gitignored personal data). Use `assets/demo-portfolio.json` / `assets/demo-sims.json`.
 - Show data provenance: the catalog must keep crediting the community spreadsheet and showing when data was last updated. Investment info is orientative — keep the "no constituye asesoramiento" footer.
 
 ### Interaction details

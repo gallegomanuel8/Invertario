@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { byIsin, productLink } from '../data';
+import { byIsin, cheaperAlternative } from '../data';
 import { fmtDate, fmtEur, fmtPct, fmtSignedEur, fmtSignedPct } from '../format';
 import { type Holding, loadHoldings, parseHoldingCsv, saveHoldings, sum, totals } from '../portfolio';
 import { BarList, StepChart } from './Charts';
@@ -12,9 +12,15 @@ export function Portfolio() {
   const [dragging, setDragging] = useState(false);
   const [groupBy, setGroupBy] = useState<GroupBy>('fund');
   const [open, setOpen] = useState<string | null>(null);
+  const [removed, setRemoved] = useState<{ holding: Holding; index: number } | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
   useEffect(() => saveHoldings(holdings), [holdings]);
+  useEffect(() => {
+    if (!removed) return;
+    const t = setTimeout(() => setRemoved(null), 8000);
+    return () => clearTimeout(t);
+  }, [removed]);
 
   async function importFiles(files: FileList | File[]) {
     const errs: string[] = [];
@@ -38,13 +44,20 @@ export function Portfolio() {
   const rows = useMemo(
     () =>
       holdings
-        .map((h) => ({ h, product: byIsin.get(h.isin), name: byIsin.get(h.isin)?.name ?? h.name ?? h.isin, ...totals(h.lots) }))
+        .map((h) => {
+          const product = byIsin.get(h.isin);
+          return { h, product, name: product?.name ?? h.name ?? h.isin, alternative: cheaperAlternative(product), ...totals(h.lots) };
+        })
         .sort((a, b) => b.value - a.value),
     [holdings],
   );
   const all = totals(holdings.flatMap((h) => h.lots));
   const known = rows.filter((r) => r.product?.totalCost != null);
   const weightedCost = known.length ? sum(known.map((r) => r.value * r.product!.totalCost!)) / sum(known.map((r) => r.value)) : null;
+
+  // Yearly cost saved by switching every position that has a cheaper same-index fund.
+  const savings = sum(rows.map((r) => (r.alternative ? (r.value * (r.product!.totalCost! - r.alternative.totalCost!)) / 100 : 0)));
+  const switchable = rows.filter((r) => r.alternative).length;
 
   const contributions = useMemo(() => {
     const byDate = new Map<string, number>();
@@ -72,38 +85,71 @@ export function Portfolio() {
     if (name != null) setHoldings((cur) => cur.map((h) => (h.isin === isin ? { ...h, name: name || undefined } : h)));
   };
 
+  const remove = (isin: string) => {
+    const index = holdings.findIndex((h) => h.isin === isin);
+    if (index < 0) return;
+    setRemoved({ holding: holdings[index], index });
+    setHoldings(holdings.filter((h) => h.isin !== isin));
+  };
+  const undoRemove = () => {
+    if (!removed) return;
+    setHoldings((cur) => [...cur.slice(0, removed.index), removed.holding, ...cur.slice(removed.index)]);
+    setRemoved(null);
+  };
+
   const clear = () => {
     if (confirm('¿Borrar todos los datos de tu cartera de este navegador?')) {
       setHoldings([]);
       setErrors([]);
+      setRemoved(null);
     }
   };
 
   return (
     <section>
-      <div className="intro">
-        <h1>Mi cartera</h1>
-        <p className="muted">
-          Importa los CSV de <em>plusvalías y minusvalías</em> de cada fondo (uno por fondo; el ISIN se toma del nombre del archivo).
-        </p>
+      <div className="hero hero-compact">
+        <div className="hero-text">
+          <p className="eyebrow">Área personal</p>
+          <h1>Mi cartera</h1>
+          <p className="muted">
+            Importa los CSV de <em>plusvalías y minusvalías</em> de cada fondo (uno por fondo; el ISIN se toma del nombre del archivo)
+            y sigue su evolución, su reparto y sus costes.
+          </p>
+        </div>
         <p className="privacy">
-          <span aria-hidden>🔒</span> Tus datos se procesan y guardan <strong>solo en este navegador</strong> (localStorage).
+          <span aria-hidden>🔒</span> Tus datos se procesan y guardan <strong>solo en este navegador</strong>.
           Nunca se envían a ningún servidor. Puedes borrarlos cuando quieras.
         </p>
       </div>
 
       <div
-        className={`dropzone${dragging ? ' dragging' : ''}`}
+        className={`dropzone${dragging ? ' dragging' : ''}${rows.length ? ' compact' : ''}`}
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => { e.preventDefault(); setDragging(false); importFiles(e.dataTransfer.files); }}
       >
-        <p><strong>Arrastra aquí tus CSV</strong> o</p>
-        <button className="btn" onClick={() => input.current?.click()}>Seleccionar archivos</button>
+        {rows.length ? (
+          <>
+            <button className="btn" onClick={() => input.current?.click()}>Añadir o actualizar CSV</button>
+            <span className="muted small">o arrástralos aquí. Reimportar un fondo sustituye sus datos.</span>
+          </>
+        ) : (
+          <>
+            <p><strong>Arrastra aquí tus CSV</strong> o</p>
+            <button className="btn" onClick={() => input.current?.click()}>Seleccionar archivos</button>
+            <p className="muted small">Formato: <code>Fecha fiscal;Inversión;Valor de mercado;Resultado fiscal</code>. Reimportar un fondo sustituye sus datos.</p>
+          </>
+        )}
         <input ref={input} type="file" accept=".csv,text/csv" multiple hidden
           onChange={(e) => { if (e.target.files) importFiles(e.target.files); e.target.value = ''; }} />
-        <p className="muted small">Formato: <code>Fecha fiscal;Inversión;Valor de mercado;Resultado fiscal</code>. Reimportar un fondo sustituye sus datos.</p>
       </div>
+
+      {removed && (
+        <div className="toast" role="status">
+          Has quitado «{byIsin.get(removed.holding.isin)?.name ?? removed.holding.name ?? removed.holding.isin}».
+          <button className="link" onClick={undoRemove}>Deshacer</button>
+        </div>
+      )}
 
       {errors.length > 0 && (
         <ul className="errors" role="alert">{errors.map((e) => <li key={e}>{e}</li>)}</ul>
@@ -121,6 +167,14 @@ export function Portfolio() {
               tone={all.result >= 0 ? 'pos' : 'neg'}
             />
             <Kpi label="Coste medio ponderado" value={fmtPct(weightedCost, 3)} sub={known.length === rows.length ? `${rows.length} fondos` : `${known.length} de ${rows.length} fondos con coste conocido`} />
+            {switchable > 0 && (
+              <Kpi
+                wide
+                label="Ahorro posible en costes"
+                value={`${fmtEur(savings)}/año`}
+                sub={`Traspasando ${switchable} ${switchable === 1 ? 'fondo' : 'fondos'} a otro del mismo índice más barato`}
+              />
+            )}
           </div>
 
           <div className="panels">
@@ -162,27 +216,35 @@ export function Portfolio() {
                 </thead>
                 <tbody>
                   {rows.map((r) => {
-                    const link = r.product && productLink(r.product);
+                    const link = r.product && `#/?f=${encodeURIComponent(r.product.id)}`;
                     const isOpen = open === r.h.isin;
                     return (
                       <Fragment key={r.h.isin}>
                         <tr>
                           <td data-label="Fondo" className="name-cell">
                             <div className="name">
-                              {link ? <a href={link} target="_blank" rel="noreferrer">{r.name}</a> : r.name}
+                              {link ? <a href={link}>{r.name}</a> : r.name}
                             </div>
-                            <div className="muted small mono">
-                              {r.h.isin}
+                            <div className="muted small">
+                              <span className="mono">{r.h.isin}</span>
                               {r.product?.region && <span> · {r.product.region}</span>}
                               {!r.product && (
                                 <span>
-                                  {' '}· no está en el catálogo ·{' '}
+                                  {' '}· No está en el catálogo ·{' '}
                                   <button className="link" onClick={() => rename(r.h.isin, r.h.name)}>
                                     {r.h.name ? 'Renombrar' : 'Ponerle nombre'}
                                   </button>
                                 </span>
                               )}
                             </div>
+                            {r.alternative && (
+                              <div className="alt small">
+                                <span aria-hidden>💡</span> Mismo índice más barato:{' '}
+                                <a href={`#/?f=${encodeURIComponent(r.alternative.id)}`}>{r.alternative.name}</a>{' '}
+                                ({fmtPct(r.alternative.totalCost)} frente a {fmtPct(r.product!.totalCost)}
+                                {r.alternative.platforms?.length ? `; en ${r.alternative.platforms.join(', ')}` : ''})
+                              </div>
+                            )}
                           </td>
                           <td data-label="Invertido" className="num">{fmtEur(r.invested)}</td>
                           <td data-label="Valor" className="num">{fmtEur(r.value)}</td>
@@ -195,7 +257,7 @@ export function Portfolio() {
                             <button className="link" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : r.h.isin)}>
                               {isOpen ? 'Ocultar' : `${r.h.lots.length} lotes`}
                             </button>
-                            <button className="link" onClick={() => setHoldings((cur) => cur.filter((h) => h.isin !== r.h.isin))}>
+                            <button className="link" onClick={() => remove(r.h.isin)}>
                               Quitar
                             </button>
                           </td>
@@ -220,9 +282,9 @@ export function Portfolio() {
   );
 }
 
-function Kpi({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: 'pos' | 'neg' }) {
+function Kpi({ label, value, sub, tone, wide }: { label: string; value: string; sub?: string; tone?: 'pos' | 'neg'; wide?: boolean }) {
   return (
-    <div className="kpi">
+    <div className={`kpi${wide ? ' kpi-wide' : ''}`}>
       <div className="muted small">{label}</div>
       <div className={`kpi-value ${tone ?? ''}`}>{value}</div>
       {sub && <div className={`small ${tone ?? 'muted'}`}>{sub}</div>}

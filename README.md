@@ -6,6 +6,7 @@ Web sencilla para consultar fondos indexados, ETFs y planes de pensiones disponi
 
 - **Catálogo**: datos de la [hoja de cálculo mantenida por la comunidad](https://docs.google.com/spreadsheets/d/1qTBkH0K5zE-e5OXsUo6Prmo2QGmYNWf63Y-iLQqdBaA). Búsqueda, filtros por tipo de activo, región/plazo y plataforma, orden por coste y rentabilidad.
 - **Productos nuevos**: cada producto guarda la fecha en que apareció por primera vez en la hoja (`addedAt`). Se marca como «Nuevo» durante 30 días (`NEW_DAYS` en `src/data.ts`).
+- **Simulador**: crea carteras simuladas con fondos del catálogo (desde su ficha o con el buscador) y proyecta su valor con interés compuesto: capital inicial, aportación mensual con subida anual, plazo, inflación, objetivo, costes reales de cada fondo e hipótesis de rentabilidad (prudente, histórica 5 años o personalizada), con escenarios favorable/desfavorable, tabla anual y exportación CSV. Se guardan solo en el navegador.
 - **Mi cartera**: importa los CSV de plusvalías/minusvalías (uno por fondo, con el ISIN en el nombre del archivo). Todo se procesa y guarda en el navegador (`localStorage`); no hay backend ni se envía nada a ningún servidor.
 
 ## Actualización diaria
