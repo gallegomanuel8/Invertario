@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { byIsin, cheaperAlternative } from '../data';
 import { fmtDate, fmtEur, fmtEur0, fmtPct, fmtSignedEur, fmtSignedPct } from '../format';
-import { externalProduct, type Holding, loadHoldings, lookupFundInfo, needsLookup, parseHoldingCsv, saveHoldings, sum, totals } from '../portfolio';
+import { externalProduct, type Holding, LOOKUP_VERSION, loadHoldings, lookupFundInfo, needsLookup, parseHoldingCsv, saveHoldings, sum, totals } from '../portfolio';
 import { assetTypeSlices } from '../simulate';
 import { BarList, Donut, StepChart } from './Charts';
 
@@ -28,7 +28,7 @@ export function Portfolio() {
     setLooking((cur) => [...cur, ...pending]);
     for (const isin of pending) {
       lookupFundInfo(isin)
-        .then((info) => setHoldings((cur) => cur.map((h) => (h.isin === isin ? { ...h, info, infoCheckedAt: new Date().toISOString() } : h))))
+        .then((info) => setHoldings((cur) => cur.map((h) => (h.isin === isin ? { ...h, info, infoCheckedAt: new Date().toISOString(), infoVersion: LOOKUP_VERSION } : h))))
         .catch(() => { /* offline or API down: retried on the next page load */ })
         .finally(() => setLooking((cur) => cur.filter((i) => i !== isin)));
     }

@@ -1,6 +1,6 @@
 // Parsing and browser-only storage of "Plusvalías y minusvalías" CSV exports.
 // Holdings never leave the browser; only the ISIN of funds missing from the catalog is looked up (see lookupFundInfo).
-import type { FundInfo } from '../api/_ft';
+import type { FundInfo } from '../api/fund';
 import type { Product } from './types';
 
 export interface Lot {
@@ -17,6 +17,7 @@ export interface Holding {
   name?: string; // user-given name for funds not in the catalog
   info?: FundInfo | null; // looked up by ISIN for funds not in the catalog (null = not found)
   infoCheckedAt?: string;
+  infoVersion?: number; // bump LOOKUP_VERSION to re-check everything after a lookup fix
   lots: Lot[];
 }
 
@@ -85,15 +86,19 @@ export function totals(lots: Lot[]) {
 /** Asks our /api/fund endpoint (FT.com behind it) about a fund. Sends only the ISIN. */
 export async function lookupFundInfo(isin: string): Promise<FundInfo | null> {
   const res = await fetch(`/api/fund?isin=${encodeURIComponent(isin)}`);
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return (await res.json()) as FundInfo;
+  const body = await res.json().catch(() => null);
+  // Only our function's explicit "not found" counts as a result; a platform 404/500 must be retried later.
+  if (res.status === 404 && body?.error === 'No encontrado') return null;
+  if (!res.ok || !body?.isin) throw new Error(`HTTP ${res.status}`);
+  return body as FundInfo;
 }
 
 const RETRY_MS = 7 * 86_400_000;
+export const LOOKUP_VERSION = 2;
 /** Funds missing from the catalog that were never looked up, or whose lookup failed over a week ago. */
 export const needsLookup = (h: Holding, inCatalog: boolean) =>
-  !inCatalog && (h.info === undefined || (h.info === null && Date.now() - new Date(h.infoCheckedAt ?? 0).getTime() > RETRY_MS));
+  !inCatalog && (h.info === undefined || (h.info === null &&
+    (h.infoVersion !== LOOKUP_VERSION || Date.now() - new Date(h.infoCheckedAt ?? 0).getTime() > RETRY_MS)));
 
 /** Catalog-shaped product built from looked-up data, so costs and asset type work like catalog funds. */
 export function externalProduct(info: FundInfo): Product {

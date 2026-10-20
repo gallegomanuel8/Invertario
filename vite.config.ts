@@ -7,7 +7,7 @@ function devApi(): Plugin {
     name: 'dev-api',
     configureServer(server) {
       server.middlewares.use('/api/fund', async (req, res) => {
-        const { handle } = await server.ssrLoadModule('/api/_ft.ts');
+        const { handle } = await server.ssrLoadModule('/api/fund.ts');
         const response: Response = await handle(new URL(req.url ?? '', 'http://localhost'));
         res.statusCode = response.status;
         response.headers.forEach((v, k) => res.setHeader(k, v));
