@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { catalog } from '../data';
-import { fmtEur, fmtPct, fmtSignedPct } from '../format';
+import { fmtEur, fmtEur0, fmtPct, fmtSignedPct } from '../format';
 import { addFundToSim, createSim, deleteSim, equalWeights, type ReturnMode, type SimPortfolio, updateSim, useSims } from '../sims';
 import { fundAssumption, project, toCsv } from '../simulate';
 import type { Product } from '../types';
@@ -241,20 +241,19 @@ function SimEditor({ sim, onDeleted }: { sim: SimPortfolio; onDeleted: () => voi
                 <button className="link" aria-expanded={showTable} onClick={() => setShowTable((s) => !s)}>{showTable ? 'Ocultar' : 'Mostrar tabla'}</button>
               </div>
               {showTable && (
-                <div className="table-wrap flat">
+                <div className="table-wrap flat years-wrap">
                   <table className="years">
                     <thead>
-                      <tr><th>Año</th><th className="num">Aportado</th><th className="num">Valor esperado</th><th className="num">Desfavorable</th><th className="num">Favorable</th><th className="num">Euros de hoy</th></tr>
+                      <tr><th>Año</th><th className="num">Aportado</th><th className="num">Valor esperado</th><th className="num">Rango (desfav. – fav.)</th><th className="num">En euros de hoy</th></tr>
                     </thead>
                     <tbody>
                       {proj.rows.map((r) => (
                         <tr key={r.year} className={sim.goal && r.year === proj.goalYear ? 'goal-row' : ''}>
                           <td>{r.year}</td>
-                          <td className="num">{fmtEur(r.contributed)}</td>
-                          <td className="num"><strong>{fmtEur(r.value)}</strong></td>
-                          <td className="num">{fmtEur(r.low)}</td>
-                          <td className="num">{fmtEur(r.high)}</td>
-                          <td className="num">{fmtEur(r.real)}</td>
+                          <td className="num">{fmtEur0(r.contributed)}</td>
+                          <td className="num"><strong>{fmtEur0(r.value)}</strong></td>
+                          <td className="num range-cell">{fmtEur0(r.low)}<br />{fmtEur0(r.high)}</td>
+                          <td className="num">{fmtEur0(r.real)}</td>
                         </tr>
                       ))}
                     </tbody>

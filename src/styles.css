@@ -342,14 +342,23 @@ td.num .costbar { margin-left: auto; width: 64px; }
 .series-band { fill: var(--series-1-area); }
 .series-base { fill: none; stroke: var(--text-2); stroke-width: 1.5; stroke-dasharray: 5 4; }
 .table-wrap.flat { box-shadow: none; }
+.years-wrap { overflow-x: auto; max-height: 520px; overflow-y: auto; }
+.years { font-size: 0.85rem; }
+.years th, .years td { padding: 8px 10px; }
+.years thead th { position: sticky; top: 0; z-index: 1; }
+.years th:first-child, .years td:first-child { position: sticky; left: 0; background: var(--surface); }
+.years thead th:first-child { background: var(--surface-2); z-index: 2; }
+.years .range-cell { color: var(--text-2); font-size: 0.8rem; line-height: 1.35; }
 .goal-row td { background: var(--best-bg); }
 .menu-wrap { position: relative; }
-.menu { position: absolute; z-index: 20; bottom: calc(100% + 6px); left: 0; min-width: 240px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); padding: 4px; display: grid; }
+.menu { z-index: 50; max-height: 60vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); padding: 4px; display: grid; }
 .menu button { display: flex; justify-content: space-between; gap: 12px; border: 0; background: none; color: var(--text); padding: 8px 10px; border-radius: 6px; text-align: left; }
 .menu button:hover:not(:disabled) { background: var(--surface-2); }
 .menu button:disabled { color: var(--text-2); cursor: default; }
 .menu .menu-new { color: var(--accent); border-top: 1px solid var(--border); border-radius: 0 0 6px 6px; }
 .added { margin: 6px 0 0; color: var(--pos); }
+.row-tools { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.row-tools .added { white-space: nowrap; }
 
 @media (max-width: 440px) {
   .brand-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
@@ -370,6 +379,8 @@ td.num .costbar { margin-left: auto; width: 64px; }
   .dropzone.compact { justify-content: flex-start; text-align: left; }
   .panels { grid-template-columns: minmax(0, 1fr); }
   .table-wrap { overflow: visible; background: transparent; border: 0; }
+  .table-wrap.years-wrap { overflow: auto; background: var(--surface); border: 1px solid var(--border); }
+  .years th, .years td { padding: 6px 8px; }
   .panel > .table-wrap { margin: 0 -4px; }
   .catalog thead, .positions thead { display: none; }
   .catalog tbody tr, .positions tbody tr:not(.lots-row) {
@@ -389,6 +400,7 @@ td.num .costbar { margin-left: auto; width: 64px; }
   .picks-row { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: 16px; padding-bottom: 6px; margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
   .pick { flex: 0 0 72%; scroll-snap-align: start; }
   .catalog td.compare-cell { grid-column: 1 / -1; text-align: left; }
+  .row-tools { flex-direction: row; flex-wrap: wrap; align-items: center; }
   td.num .costbar { margin-left: 0; }
   .sheet { margin: auto 0 0; width: 100vw; max-width: 100vw; height: 88dvh; border-radius: 18px 18px 0 0; }
   .sheet-body { padding: 16px 16px 28px; }

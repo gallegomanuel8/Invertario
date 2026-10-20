@@ -3,6 +3,8 @@ const pct = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFr
 const dateFmt = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
 
 export const fmtEur = (n: number) => eur.format(n);
+const eur0 = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0, useGrouping: 'always' });
+export const fmtEur0 = (n: number) => eur0.format(n);
 export const fmtSignedEur = (n: number) => (n > 0 ? '+' : '') + eur.format(n);
 export const fmtPct = (n: number | null | undefined, digits = 2) =>
   n == null ? '—' : new Intl.NumberFormat('es-ES', { minimumFractionDigits: digits, maximumFractionDigits: digits, useGrouping: 'always' }).format(n) + ' %';

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { catalog, cheapestByCategory, isNew, NEW_DAYS } from '../data';
 import { fmtDate, fmtPct } from '../format';
 import type { Product, ProductType } from '../types';
+import { AddToSim } from './AddToSim';
 import { AssetTag, CostBar } from './bits';
 import { Compare } from './Compare';
 import { ProductDetail } from './ProductDetail';
@@ -389,7 +390,9 @@ function Row({ p, onOpen, compared, compareFull, onToggleCompare }: {
       {p.type === 'plan' && <td data-label="RV / RF" className="num">{p.equityPct != null ? `${p.equityPct} / ${100 - p.equityPct}` : '—'}</td>}
       {p.type === 'plan' && <td data-label="Código DGS" className="mono">{p.dgsCode ?? '—'}</td>}
       <td className="compare-cell">
-        <button
+        <div className="row-tools">
+          <AddToSim p={p} compact />
+          <button
           className="compare-toggle"
           aria-pressed={compared}
           disabled={!compared && compareFull}
@@ -397,7 +400,8 @@ function Row({ p, onOpen, compared, compareFull, onToggleCompare }: {
           title={!compared && compareFull ? 'Máximo 3 productos' : undefined}
         >
           {compared ? '✓ Comparando' : '+ Comparar'}
-        </button>
+          </button>
+        </div>
       </td>
     </tr>
   );
