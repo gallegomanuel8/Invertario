@@ -404,6 +404,12 @@ td.num .costbar { margin-left: auto; width: 64px; }
   .brand-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 }
 
+.shared-preview { border: 2px solid var(--accent); margin-bottom: 20px; display: grid; gap: 10px; }
+.shared-preview h2, .shared-preview p { margin: 0; }
+.shared-funds { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-width: 640px; }
+.shared-funds li { display: flex; justify-content: space-between; gap: 12px; font-size: 0.9rem; }
+.link:disabled { color: var(--text-2); cursor: not-allowed; }
+
 /* Mobile: tables become cards */
 @media (max-width: 760px) {
   h1 { font-size: 1.35rem; }

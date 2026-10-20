@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { catalog } from '../data';
 import { fmtEur, fmtEur0, fmtPct, fmtSignedPct } from '../format';
-import { addFundToSim, createSim, deleteSim, equalWeights, type ReturnMode, type SimPortfolio, updateSim, useSims } from '../sims';
+import { addFundToSim, createSim, decodeSim, deleteSim, equalWeights, importSim, type ReturnMode, shareUrl, type SimPortfolio, updateSim, useSims } from '../sims';
 import { assetTypeSlices, fundAssumption, project, toCsv } from '../simulate';
 import type { Product } from '../types';
 import { AssetTag } from './bits';
@@ -22,10 +22,17 @@ const MODES: { id: ReturnMode; label: string; hint: string }[] = [
 ];
 
 const readSelected = () => location.hash.match(/^#\/simulador\/([\w-]+)/)?.[1] ?? null;
+const readShared = () => {
+  const code = location.hash.match(/^#\/simulador\/compartida\?c=([\w-]+)/)?.[1];
+  return code ? decodeSim(code, new Set(byId.keys())) : null;
+};
+const hadShareLink = () => location.hash.startsWith('#/simulador/compartida');
 
 export function Simulator() {
   const sims = useSims();
   const [selectedId, setSelectedId] = useState<string | null>(readSelected);
+  const [incoming, setIncoming] = useState(readShared);
+  const [badLink] = useState(() => hadShareLink() && !readShared());
   const sim = sims.find((s) => s.id === selectedId) ?? sims[0] ?? null;
 
   const select = (id: string) => {
@@ -41,8 +48,24 @@ export function Simulator() {
     select(s.id);
   };
 
+  const acceptShared = () => {
+    if (!incoming) return;
+    const { dropped: _, ...data } = incoming;
+    const s = importSim(data);
+    setIncoming(null);
+    select(s.id);
+  };
+  const dismissShared = () => {
+    setIncoming(null);
+    history.replaceState(null, '', sim ? `#/simulador/${sim.id}` : '#/simulador');
+  };
+
   return (
     <section>
+      {incoming && <SharedPreview data={incoming} onAccept={acceptShared} onDismiss={dismissShared} />}
+      {badLink && !incoming && (
+        <p className="errors" role="alert">El enlace de cartera compartida no es válido o está incompleto.</p>
+      )}
       <div className="hero hero-compact">
         <div className="hero-text">
           <p className="eyebrow">Planifica</p>
@@ -107,6 +130,27 @@ function SimEditor({ sim, onDeleted }: { sim: SimPortfolio; onDeleted: () => voi
   const setFund = (id: string, patch: Partial<SimPortfolio['funds'][number]>) =>
     set({ funds: sim.funds.map((f) => (f.id === id ? { ...f, ...patch } : f)) });
   const removeFund = (id: string) => set({ funds: sim.funds.filter((f) => f.id !== id) });
+  const [shared, setShared] = useState<string | null>(null);
+  const share = async () => {
+    const url = shareUrl(sim);
+    try {
+      if (navigator.share && matchMedia('(pointer: coarse)').matches) {
+        await navigator.share({ title: `Cartera «${sim.name}» en Invertario`, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setShared('Enlace copiado. Quien lo abra podrá añadir esta cartera a su simulador.');
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') return; // user closed the share sheet
+      prompt('Copia este enlace para compartir la cartera:', url);
+    }
+  };
+  useEffect(() => {
+    if (!shared) return;
+    const t = setTimeout(() => setShared(null), 5000);
+    return () => clearTimeout(t);
+  }, [shared]);
+
   const rename = () => {
     const name = prompt('Nuevo nombre:', sim.name)?.trim();
     if (name) set({ name });
@@ -128,11 +172,13 @@ function SimEditor({ sim, onDeleted }: { sim: SimPortfolio; onDeleted: () => voi
           <div className="panel-head">
             <h2>{sim.name}</h2>
             <div className="row-actions">
+              <button className="link" onClick={share} disabled={!funds.length} title={funds.length ? undefined : 'Añade algún fondo para compartir'}>Compartir</button>
               <button className="link" onClick={rename}>Renombrar</button>
               <button className="link danger" onClick={remove}>Borrar</button>
             </div>
           </div>
 
+          {shared && <p className="small added" role="status">{shared}</p>}
           <h3 className="sub">Fondos</h3>
           {funds.length === 0 && <p className="muted small">Añade fondos con el buscador o desde el catálogo.</p>}
           <ul className="sim-funds">
@@ -329,6 +375,43 @@ function Kpi({ label, value, sub }: { label: string; value: string; sub?: string
       <div className="muted small">{label}</div>
       <div className="kpi-value">{value}</div>
       {sub && <div className="small muted">{sub}</div>}
+    </div>
+  );
+}
+
+function SharedPreview({ data, onAccept, onDismiss }: {
+  data: NonNullable<ReturnType<typeof decodeSim>>;
+  onAccept: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="panel shared-preview" role="region" aria-label="Cartera compartida">
+      <p className="eyebrow">Te han compartido una cartera</p>
+      <h2>{data.name}</h2>
+      <ul className="shared-funds">
+        {data.funds.map((f) => {
+          const p = byId.get(f.id)!;
+          return (
+            <li key={f.id}>
+              <span><AssetTag p={p} /> {p.name}</span>
+              <span className="num">{fmtPct(f.weight, 0)}</span>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="muted small">
+        {fmtEur(data.initial)} iniciales · {fmtEur(data.monthly)}/mes{data.yearlyIncrease ? ` (+${fmtPct(data.yearlyIncrease, 1)}/año)` : ''} ·{' '}
+        {data.years} años · hipótesis {MODES.find((m) => m.id === data.returnMode)!.label.toLowerCase()}
+        {data.goal ? ` · objetivo ${fmtEur(data.goal)}` : ''}
+      </p>
+      {data.dropped > 0 && (
+        <p className="small neg">{data.dropped} {data.dropped === 1 ? 'fondo ya no está' : 'fondos ya no están'} en el catálogo y no se añadirán.</p>
+      )}
+      <div className="detail-actions">
+        <button className="btn btn-primary" onClick={onAccept} disabled={!data.funds.length}>Añadir a mis carteras</button>
+        <button className="btn" onClick={onDismiss}>Descartar</button>
+      </div>
+      <p className="muted small">Se guardará solo en tu navegador. Después puedes modificarla sin afectar a quien te la envió.</p>
     </div>
   );
 }
