@@ -1,16 +1,15 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { byIsin, cheaperAlternative } from '../data';
-import { fmtDate, fmtEur, fmtPct, fmtSignedEur, fmtSignedPct } from '../format';
+import { fmtDate, fmtEur, fmtEur0, fmtPct, fmtSignedEur, fmtSignedPct } from '../format';
 import { type Holding, loadHoldings, parseHoldingCsv, saveHoldings, sum, totals } from '../portfolio';
-import { BarList, StepChart } from './Charts';
+import { assetTypeSlices } from '../simulate';
+import { BarList, Donut, StepChart } from './Charts';
 
-type GroupBy = 'fund' | 'region' | 'assetClass';
 
 export function Portfolio() {
   const [holdings, setHoldings] = useState<Holding[]>(loadHoldings);
   const [errors, setErrors] = useState<string[]>([]);
   const [dragging, setDragging] = useState(false);
-  const [groupBy, setGroupBy] = useState<GroupBy>('fund');
   const [open, setOpen] = useState<string | null>(null);
   const [removed, setRemoved] = useState<{ holding: Holding; index: number } | null>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -66,19 +65,16 @@ export function Portfolio() {
     return [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, v]) => ({ date, value: (acc += v) }));
   }, [holdings]);
 
-  const allocation = useMemo(() => {
-    const groups = new Map<string, { value: number; hint?: string }>();
+  const byRegion = useMemo(() => {
+    const groups = new Map<string, number>();
     for (const r of rows) {
-      const key =
-        groupBy === 'fund' ? r.name
-        : groupBy === 'region' ? r.product?.region ?? 'Sin clasificar'
-        : r.product?.assetClass ?? 'Sin clasificar';
-      const g = groups.get(key) ?? { value: 0 };
-      g.value += r.value;
-      groups.set(key, g);
+      const key = r.product?.region ?? 'Sin clasificar';
+      groups.set(key, (groups.get(key) ?? 0) + r.value);
     }
-    return [...groups.entries()].map(([label, g]) => ({ label, ...g })).sort((a, b) => b.value - a.value);
-  }, [rows, groupBy]);
+    return [...groups.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
+  }, [rows]);
+  const byFund = rows.map((r) => ({ label: r.name, value: r.value }));
+  const byType = assetTypeSlices(rows.map((r) => ({ product: r.product, amount: r.value })));
 
   const rename = (isin: string, current?: string) => {
     const name = prompt('Nombre para este fondo (solo se guarda en tu navegador):', current ?? '')?.trim();
@@ -177,6 +173,14 @@ export function Portfolio() {
             )}
           </div>
 
+          <div className="panel composition-panel">
+            <h2 className="panel-title">Composición</h2>
+            <div className="composition">
+              <Donut title="Por fondo" slices={byFund} format={fmtEur} center={{ label: 'Valor', value: fmtEur0(all.value) }} />
+              <Donut title="Por tipo de activo" slices={byType} format={fmtEur} center={{ label: 'Renta variable', value: fmtPct((sum(byType.filter((t) => t.label === 'Renta variable').map((t) => t.value)) / all.value) * 100, 0) }} />
+            </div>
+          </div>
+
           <div className="panels">
             <div className="panel">
               <h2>Capital aportado acumulado</h2>
@@ -184,15 +188,8 @@ export function Portfolio() {
               <StepChart points={contributions} label="Capital aportado acumulado a lo largo del tiempo" />
             </div>
             <div className="panel">
-              <div className="panel-head">
-                <h2>Distribución</h2>
-                <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupBy)} aria-label="Agrupar por">
-                  <option value="fund">Por fondo</option>
-                  <option value="region">Por región / plazo</option>
-                  <option value="assetClass">Por tipo de activo</option>
-                </select>
-              </div>
-              <BarList items={allocation} />
+              <h2 className="panel-title">Por región / plazo</h2>
+              <BarList items={byRegion} />
             </div>
           </div>
 

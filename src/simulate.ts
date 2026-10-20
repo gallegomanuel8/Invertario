@@ -111,3 +111,19 @@ export function toCsv(rows: YearRow[]) {
   for (const r of rows) lines.push([r.year, n(r.contributed), n(r.value), n(r.low), n(r.high), n(r.noCosts), n(r.real)].join(';'));
   return lines.join('\n');
 }
+
+/** Splits weighted amounts into equity / fixed income exposure (mixed funds count proportionally). */
+export function assetTypeSlices(items: { product?: Product; amount: number }[]) {
+  let equity = 0, bonds = 0, unknown = 0;
+  for (const { product, amount } of items) {
+    if (!product) { unknown += amount; continue; }
+    const eq = equityShare(product);
+    equity += amount * eq;
+    bonds += amount * (1 - eq);
+  }
+  return [
+    { label: 'Renta variable', value: equity, color: 'var(--cat-1)' },
+    { label: 'Renta fija', value: bonds, color: 'var(--cat-3)' },
+    { label: 'Sin clasificar', value: unknown, color: 'var(--cat-other)' },
+  ].filter((s) => s.value > 0);
+}

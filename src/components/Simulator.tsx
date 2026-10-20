@@ -2,10 +2,10 @@ import { useMemo, useState } from 'react';
 import { catalog } from '../data';
 import { fmtEur, fmtEur0, fmtPct, fmtSignedPct } from '../format';
 import { addFundToSim, createSim, deleteSim, equalWeights, type ReturnMode, type SimPortfolio, updateSim, useSims } from '../sims';
-import { fundAssumption, project, toCsv } from '../simulate';
+import { assetTypeSlices, fundAssumption, project, toCsv } from '../simulate';
 import type { Product } from '../types';
 import { AssetTag } from './bits';
-import { ProjectionChart } from './Charts';
+import { Donut, ProjectionChart } from './Charts';
 
 const byId = new Map(catalog.items.map((p) => [p.id, p]));
 
@@ -99,6 +99,10 @@ function SimEditor({ sim, onDeleted }: { sim: SimPortfolio; onDeleted: () => voi
   const last = proj.rows.at(-1);
   const weightSum = sim.funds.reduce((a, f) => a + f.weight, 0);
   const costImpact = last ? last.noCosts - last.value : 0;
+  const weightTotal = funds.reduce((a, x) => a + x.f.weight, 0) || 1;
+  const byFund = funds.map(({ f, p }) => ({ label: p.name, value: (f.weight / weightTotal) * 100 }));
+  const byType = assetTypeSlices(funds.map(({ f, p }) => ({ product: p, amount: (f.weight / weightTotal) * 100 })));
+  const equityPct = byType.find((t) => t.label === 'Renta variable')?.value ?? 0;
 
   const setFund = (id: string, patch: Partial<SimPortfolio['funds'][number]>) =>
     set({ funds: sim.funds.map((f) => (f.id === id ? { ...f, ...patch } : f)) });
@@ -217,6 +221,15 @@ function SimEditor({ sim, onDeleted }: { sim: SimPortfolio; onDeleted: () => voi
               <Kpi label="Rentabilidad neta esperada" value={`${fmtPct(proj.netReturn)}/año`} sub={`Volatilidad aprox. ${fmtPct(proj.volatility, 0)}`} />
               <Kpi label="Coste de los fondos" value={fmtPct(proj.cost, 3)}
                 sub={`Te costaría ${fmtEur(costImpact)} en ${sim.years} años`} />
+            </div>
+
+            <div className="panel">
+              <h2 className="panel-title">Composición</h2>
+              <div className="composition">
+                <Donut title="Por fondo" slices={byFund} center={{ label: 'Fondos', value: String(funds.length) }} />
+                <Donut title="Por tipo de activo" slices={byType}
+                  center={{ label: 'RV / RF', value: `${Math.round(equityPct)} / ${100 - Math.round(equityPct)}` }} />
+              </div>
             </div>
 
             <div className="panel">

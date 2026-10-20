@@ -181,3 +181,73 @@ export function ProjectionChart({ points, label }: { points: BandPoint[]; label:
     </div>
   );
 }
+
+export interface Slice { label: string; value: number; color?: string; hint?: string }
+
+const MAX_SLICES = 6;
+
+/** Folds the tail into "Otros" so the donut never carries more than MAX_SLICES segments. */
+export function foldSlices(items: Slice[]): Slice[] {
+  const sorted = [...items].filter((i) => i.value > 0).sort((a, b) => b.value - a.value);
+  if (sorted.length <= MAX_SLICES) return sorted;
+  const head = sorted.slice(0, MAX_SLICES - 1);
+  const tail = sorted.slice(MAX_SLICES - 1);
+  return [...head, { label: `Otros (${tail.length})`, value: tail.reduce((a, b) => a + b.value, 0), color: 'var(--cat-other)', hint: tail.map((t) => t.label).join(', ') }];
+}
+
+/** Part-to-whole donut with a legend that always shows label, share and amount (identity never by color alone). */
+export function Donut({ title, slices, format, center }: {
+  title: string;
+  slices: Slice[];
+  format?: (v: number) => string;
+  center?: { label: string; value: string };
+}) {
+  const [active, setActive] = useState<number | null>(null);
+  const data = foldSlices(slices).map((s, i) => ({ ...s, color: s.color ?? `var(--cat-${i + 1})` }));
+  const total = data.reduce((a, b) => a + b.value, 0);
+  if (!total) return null;
+
+  const size = 168, stroke = 26, r = (size - stroke) / 2, c = 2 * Math.PI * r;
+  const gap = data.length > 1 ? 2 : 0; // 2px surface gap between segments
+  let offset = 0;
+  const pct = (v: number) => `${((v / total) * 100).toFixed(1).replace('.', ',')} %`;
+  const shown = active != null ? data[active] : null;
+
+  return (
+    <figure className="donut">
+      <figcaption className="donut-title">{title}</figcaption>
+      <div className="donut-body">
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img"
+          aria-label={`${title}: ${data.map((d) => `${d.label} ${pct(d.value)}`).join(', ')}`}>
+          <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
+            {data.map((d, i) => {
+              const len = (d.value / total) * c;
+              const seg = (
+                <circle key={d.label} cx={size / 2} cy={size / 2} r={r} fill="none" stroke={d.color}
+                  strokeWidth={active === i ? stroke + 6 : stroke}
+                  strokeDasharray={`${Math.max(0.5, len - gap)} ${c}`} strokeDashoffset={-offset}
+                  opacity={active != null && active !== i ? 0.35 : 1}
+                  onPointerEnter={() => setActive(i)} onPointerLeave={() => setActive(null)} className="donut-seg" />
+              );
+              offset += len;
+              return seg;
+            })}
+          </g>
+          <text x="50%" y="46%" textAnchor="middle" className="donut-center-label">{shown ? shown.label.slice(0, 18) + (shown.label.length > 18 ? '…' : '') : center?.label}</text>
+          <text x="50%" y="58%" textAnchor="middle" className="donut-center-value">{shown ? pct(shown.value) : center?.value}</text>
+        </svg>
+        <ul className="donut-legend">
+          {data.map((d, i) => (
+            <li key={d.label} className={`${active === i ? 'active' : ''}${format ? '' : ' no-amount'}`} title={d.hint ? `${d.label}: ${d.hint}` : d.label}
+              onPointerEnter={() => setActive(i)} onPointerLeave={() => setActive(null)}>
+              <span className="swatch" style={{ background: d.color }} aria-hidden />
+              <span className="donut-label">{d.label}</span>
+              <span className="num">{pct(d.value)}</span>
+              {format && <span className="num muted small">{format(d.value)}</span>}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </figure>
+  );
+}
