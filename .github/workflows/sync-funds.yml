@@ -1,0 +1,30 @@
+name: Sync funds
+
+on:
+  schedule:
+    - cron: '30 5 * * *' # daily, 05:30 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/sync-funds.mjs
+      - name: Commit changes
+        run: |
+          if git diff --quiet src/data/funds.json; then
+            echo "Sin cambios"
+            exit 0
+          fi
+          git config user.name "invertario-bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add src/data/funds.json
+          git commit -m "chore(data): sync funds $(date -u +%F)"
+          git push
