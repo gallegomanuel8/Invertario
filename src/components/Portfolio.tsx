@@ -5,6 +5,8 @@ import { externalProduct, type Holding, LOOKUP_VERSION, loadHoldings, lookupFund
 import { assetTypeSlices, blend, projectFrom } from '../simulate';
 import type { ReturnMode } from '../sims';
 import type { Product } from '../types';
+import { OPEN_DATA_EVENT } from '../backup';
+import { AssetTag } from './bits';
 import { BarList, Donut, TimelineChart } from './Charts';
 
 
@@ -146,7 +148,7 @@ export function Portfolio() {
   };
 
   const clear = () => {
-    if (confirm('¿Borrar todos los datos de tu cartera de este navegador?')) {
+    if (confirm('¿Borrar la cartera importada de este navegador? Tus carteras simuladas no se tocan. No se puede deshacer: exporta antes una copia si la quieres conservar.')) {
       setHoldings([]);
       setErrors([]);
       setRemoved(null);
@@ -166,7 +168,8 @@ export function Portfolio() {
         </div>
         <p className="privacy">
           <span aria-hidden>🔒</span> Tus datos se procesan y guardan <strong>solo en este navegador</strong> y puedes borrarlos cuando quieras.
-          Para identificar fondos que no están en el catálogo se consulta <strong>solo su ISIN</strong> (vía FT.com); nunca importes ni movimientos.
+          Para identificar fondos que no están en el catálogo se consulta <strong>solo su ISIN</strong> (vía FT.com); nunca importes ni movimientos.{' '}
+          <button className="link" onClick={() => dispatchEvent(new Event(OPEN_DATA_EVENT))}>Exportar o importar tus datos</button>
         </p>
       </div>
 
@@ -301,7 +304,7 @@ export function Portfolio() {
           <div className="panel">
             <div className="panel-head">
               <h2>Posiciones</h2>
-              <button className="btn btn-danger" onClick={clear}>Borrar mis datos</button>
+              <button className="btn btn-danger" onClick={clear}>Borrar cartera</button>
             </div>
             <div className="table-wrap">
               <table className="positions">
@@ -329,6 +332,7 @@ export function Portfolio() {
                               {r.external && <span className="badge-ext" title={`Datos obtenidos de ${r.h.info!.source} a partir del ISIN`}>vía {r.h.info!.source}</span>}
                             </div>
                             <div className="muted small">
+                              {r.product?.assetClass && <><AssetTag p={r.product} />{' '}</>}
                               <span className="mono">{r.h.isin}</span>
                               {r.product?.region && <span> · {r.product.region}</span>}
                               {!byIsin.has(r.h.isin) && (
@@ -342,6 +346,13 @@ export function Portfolio() {
                                 </span>
                               )}
                             </div>
+                            {byIsin.get(r.h.isin)?.platforms?.length ? (
+                              <div className="platforms pos-platforms" aria-label="Disponible en">
+                                {byIsin.get(r.h.isin)!.platforms!.map((pl) => <span key={pl} className="pill">{pl}</span>)}
+                              </div>
+                            ) : byIsin.has(r.h.isin) ? null : (
+                              <div className="muted small pos-platforms">Plataformas: sin datos (fondo fuera del catálogo)</div>
+                            )}
                             {r.alternative && (
                               <div className="alt small">
                                 <span aria-hidden>💡</span> Mismo índice más barato:{' '}

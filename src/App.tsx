@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Catalog } from './components/Catalog';
+import { OPEN_DATA_EVENT } from './backup';
+import { DataManager } from './components/DataManager';
+import { Sheet } from './components/Sheet';
 import { Portfolio } from './components/Portfolio';
 import { Simulator } from './components/Simulator';
 import { catalog } from './data';
@@ -25,6 +28,13 @@ function readTheme(): Theme {
 export function App() {
   const [route, setRoute] = useState<Route>(readRoute);
   const [theme, setTheme] = useState<Theme>(readTheme);
+  const [dataOpen, setDataOpen] = useState(false);
+
+  useEffect(() => {
+    const open = () => setDataOpen(true);
+    addEventListener(OPEN_DATA_EVENT, open);
+    return () => removeEventListener(OPEN_DATA_EVENT, open);
+  }, []);
 
   useEffect(() => {
     const onHash = () => setRoute(readRoute());
@@ -57,6 +67,9 @@ export function App() {
             <a href="#/" aria-current={route === 'catalogo' ? 'page' : undefined}>Catálogo</a>
             <a href="#/simulador" aria-current={route === 'simulador' ? 'page' : undefined}>Simulador</a>
             <a href="#/cartera" aria-current={route === 'cartera' ? 'page' : undefined}>Mi cartera</a>
+            <button className="theme-toggle" onClick={() => setDataOpen(true)} aria-label="Tus datos: exportar, importar o borrar" title="Tus datos">
+              <span aria-hidden>⇅</span>
+            </button>
             <button className="theme-toggle" onClick={nextTheme} aria-label={`${THEME_LABEL[theme]}. Cambiar tema`} title={THEME_LABEL[theme]}>
               <span aria-hidden>{THEME_ICON[theme]}</span>
             </button>
@@ -69,8 +82,12 @@ export function App() {
       <footer className="container footer muted small">
         Datos basados en la{' '}
         <a href={catalog.source} target="_blank" rel="noreferrer">hoja de cálculo mantenida por la comunidad</a>.
-        Información orientativa; no constituye asesoramiento financiero.
+        Información orientativa; no constituye asesoramiento financiero.{' '}
+        <button className="link small" onClick={() => setDataOpen(true)}>Tus datos: exportar, importar o borrar</button>
       </footer>
+      <Sheet open={dataOpen} onClose={() => setDataOpen(false)} title="Tus datos">
+        <DataManager />
+      </Sheet>
     </>
   );
 }

@@ -420,6 +420,20 @@ td.num .costbar { margin-left: auto; width: 64px; }
 .shared-funds li { display: flex; justify-content: space-between; gap: 12px; font-size: 0.9rem; }
 .link:disabled { color: var(--text-2); cursor: not-allowed; }
 
+.pos-platforms { margin-top: 6px; }
+.data-manager section { display: grid; gap: 8px; justify-items: start; }
+.data-manager .errors { margin: 0; width: 100%; }
+.import-preview { display: grid; gap: 8px; background: var(--surface-2); border-radius: var(--radius); padding: 12px; width: 100%; }
+.import-preview p { margin: 0; }
+.danger-zone { border: 1px solid var(--neg); border-radius: var(--radius); padding: 14px; }
+.danger-zone h3 { color: var(--neg) !important; }
+.warning { background: color-mix(in srgb, var(--neg) 8%, var(--surface)); border-radius: 8px; padding: 10px 12px; font-size: 0.9rem; }
+.warning p { margin: 0 0 6px; }
+.warning ul { margin: 0 0 6px; padding-left: 20px; }
+.confirm-input { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; width: 200px; letter-spacing: 0.05em; }
+.btn-danger-solid { background: var(--neg); border-color: var(--neg); color: var(--on-accent); }
+.btn-danger-solid:hover:not(:disabled) { background: var(--neg); filter: brightness(1.08); }
+
 /* Mobile: tables become cards */
 @media (max-width: 760px) {
   h1 { font-size: 1.35rem; }

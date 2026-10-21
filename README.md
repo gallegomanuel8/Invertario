@@ -11,6 +11,8 @@ Web sencilla para consultar fondos indexados, ETFs y planes de pensiones disponi
 
 - **Fondos no catalogados**: al importar un CSV de un fondo que no está en el catálogo, la web consulta automáticamente `GET /api/fund?isin=…` (función serverless en `api/`, que lee la ficha pública de FT.com y, si no la encuentra, OpenFIGI) para obtener nombre, categoría, gastos corrientes y tipo de activo. Solo se envía el ISIN; el resultado se guarda en el navegador.
 
+- **Tus datos** (botón ⇅ de la cabecera o enlace del pie): exporta todo lo guardado en el navegador (cartera, carteras simuladas, tema) a un `.json`, impórtalo en otro navegador (combinando o reemplazando) o bórralo todo, con aviso de que no se puede recuperar sin copia.
+
 ## Actualización diaria
 
 `.github/workflows/sync-funds.yml` se ejecuta cada día (05:30 UTC) y también manualmente desde la pestaña *Actions*:
