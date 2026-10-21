@@ -2,9 +2,13 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { byIsin, cheaperAlternative } from '../data';
 import { fmtDate, fmtEur, fmtEur0, fmtPct, fmtSignedEur, fmtSignedPct } from '../format';
 import { externalProduct, type Holding, LOOKUP_VERSION, loadHoldings, lookupFundInfo, needsLookup, parseHoldingCsv, saveHoldings, sum, totals } from '../portfolio';
-import { assetTypeSlices } from '../simulate';
-import { BarList, Donut, StepChart } from './Charts';
+import { assetTypeSlices, blend, projectFrom } from '../simulate';
+import type { ReturnMode } from '../sims';
+import type { Product } from '../types';
+import { BarList, Donut, TimelineChart } from './Charts';
 
+
+const HORIZON_YEARS = 20;
 
 // ISINs already looked up during this page load (module-level so remounts don't repeat requests).
 const attempted = new Set<string>();
@@ -84,6 +88,34 @@ export function Portfolio() {
     let acc = 0;
     return [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, v]) => ({ date, value: (acc += v) }));
   }, [holdings]);
+
+  // ---- Projection to 20 years after the first contribution ----
+  const [mode, setMode] = useState<Exclude<ReturnMode, 'personalizada'>>('prudente');
+  const [monthlyInput, setMonthlyInput] = useState<number | null>(null);
+  const [view, setView] = useState<'proyeccion' | 'historico'>('proyeccion');
+  const firstDate = contributions.length ? new Date(contributions[0].date) : new Date();
+  const horizon = new Date(firstDate);
+  horizon.setFullYear(horizon.getFullYear() + HORIZON_YEARS);
+  const now = new Date();
+  const monthsLeft = Math.max(0, (horizon.getFullYear() - now.getFullYear()) * 12 + horizon.getMonth() - now.getMonth());
+  // Default monthly contribution: what was invested over the last 12 months (first purchase excluded, it is usually a lump sum).
+  const avgMonthly = useMemo(() => {
+    const lots = holdings.flatMap((h) => h.lots).filter((l) => l.date !== contributions[0]?.date);
+    const since = new Date(now); since.setFullYear(since.getFullYear() - 1);
+    const recent = lots.filter((l) => new Date(l.date) >= since);
+    const months = Math.min(12, Math.max(1, Math.round((now.getTime() - firstDate.getTime()) / (30.44 * 86_400_000))));
+    return Math.round(sum(recent.map((l) => l.invested)) / months);
+  }, [holdings]); // depends only on the imported lots
+  const monthly = monthlyInput ?? avgMonthly;
+  const assumptions = blend(
+    rows.map((r) => ({ product: r.product ?? ({ id: r.h.isin, type: 'fondo', isin: r.h.isin, name: r.name, assetClass: null, region: null, totalCost: 0, addedAt: null } satisfies Product), amount: r.value })),
+    mode,
+  );
+  const future = useMemo(
+    () => projectFrom({ start: all.value, startDate: now, contributed: all.invested, monthly, months: monthsLeft, ...assumptions }),
+    [all.value, all.invested, monthly, monthsLeft, assumptions.netReturn, assumptions.volatility],
+  );
+  const end = future.at(-1);
 
   const byRegion = useMemo(() => {
     const groups = new Map<string, number>();
@@ -194,22 +226,75 @@ export function Portfolio() {
           </div>
 
           <div className="panel composition-panel">
+            <div className="panel-head">
+              <h2>Aportado frente a valor</h2>
+              <div className="head-controls">
+              {end && (
+                <div className="segmented small-seg" role="radiogroup" aria-label="Periodo de la gráfica">
+                  {(['proyeccion', 'historico'] as const).map((v) => (
+                    <button key={v} role="radio" aria-checked={view === v} aria-selected={view === v} onClick={() => setView(v)}>
+                      {v === 'proyeccion' ? `Proyección a ${HORIZON_YEARS} años` : 'Solo histórico'}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {view === 'proyeccion' && end && (
+              <div className="segmented small-seg" role="radiogroup" aria-label="Hipótesis de rentabilidad">
+                {(['prudente', 'historica'] as const).map((m) => (
+                  <button key={m} role="radio" aria-checked={mode === m} aria-selected={mode === m} onClick={() => setMode(m)}>
+                    {m === 'prudente' ? 'Prudente' : 'Histórica 5 años'}
+                  </button>
+                ))}
+              </div>
+              )}
+              </div>
+            </div>
+            <p className="muted">
+              Hoy: aportado <strong>{fmtEur(all.invested)}</strong>, valor <strong>{fmtEur(all.value)}</strong>{' '}
+              <span className={all.result >= 0 ? 'pos' : 'neg'}>({fmtSignedEur(all.result)})</span>.
+              {end && (
+                <> Estimación a {horizon.getFullYear()} ({HORIZON_YEARS} años desde tu primera aportación):{' '}
+                  <strong>{fmtEur0(end.value)}</strong> esperado, entre {fmtEur0(end.low)} y {fmtEur0(end.high)}, habiendo aportado {fmtEur0(end.contributed)}.</>
+              )}
+            </p>
+            {end && view === 'proyeccion' && (
+              <div className="projection-controls">
+                <label className="field">
+                  <span className="muted small">Aportación mensual a partir de hoy</span>
+                  <span className="field-input">
+                    <input type="number" min={0} step={10} value={monthly}
+                      onChange={(e) => setMonthlyInput(Math.max(0, Number(e.target.value) || 0))} />
+                    <span className="muted">€</span>
+                  </span>
+                </label>
+                <span className="muted small">
+                  {monthlyInput == null ? `Tu media de los últimos 12 meses. ` : <><button className="link" onClick={() => setMonthlyInput(null)}>Volver a tu media ({fmtEur0(avgMonthly)})</button>. </>}
+                  Rentabilidad neta estimada {fmtPct(assumptions.netReturn)}/año con los costes de tus fondos.
+                </span>
+              </div>
+            )}
+            <TimelineChart
+              label={`Aportado frente a valor de la cartera${end ? ` y estimación hasta ${horizon.getFullYear()}` : ''}`}
+              past={contributions.map((c) => ({ t: new Date(c.date).getTime(), contributed: c.value }))}
+              today={{ t: now.getTime(), contributed: all.invested, value: all.value }}
+              future={view === 'proyeccion' ? future : []}
+            />
+            <p className="muted small">
+              El CSV solo incluye el valor actual de cada lote, así que el valor pasado no se muestra; lo aportado sí es real.
+              {end && ' La estimación supone aportaciones constantes, no incluye impuestos y es orientativa.'}
+              {!end && ` Tu cartera ya supera los ${HORIZON_YEARS} años, por eso no se proyecta.`}
+            </p>
+          </div>
+
+          <div className="panel composition-panel">
             <h2 className="panel-title">Composición</h2>
             <div className="composition">
               <Donut title="Por fondo" slices={byFund} format={fmtEur} center={{ label: 'Valor', value: fmtEur0(all.value) }} />
               <Donut title="Por tipo de activo" slices={byType} format={fmtEur} center={{ label: 'Renta variable', value: fmtPct((sum(byType.filter((t) => t.label === 'Renta variable').map((t) => t.value)) / all.value) * 100, 0) }} />
-            </div>
-          </div>
-
-          <div className="panels">
-            <div className="panel">
-              <h2>Capital aportado acumulado</h2>
-              <p className="muted small">Suma de la inversión de cada lote según su fecha fiscal.</p>
-              <StepChart points={contributions} label="Capital aportado acumulado a lo largo del tiempo" />
-            </div>
-            <div className="panel">
-              <h2 className="panel-title">Por región / plazo</h2>
-              <BarList items={byRegion} />
+              <figure className="donut">
+                <figcaption className="donut-title">Por región / plazo</figcaption>
+                <BarList items={byRegion} />
+              </figure>
             </div>
           </div>
 

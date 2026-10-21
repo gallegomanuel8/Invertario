@@ -127,3 +127,37 @@ export function assetTypeSlices(items: { product?: Product; amount: number }[]) 
     { label: 'Sin clasificar', value: unknown, color: 'var(--cat-other)' },
   ].filter((s) => s.value > 0);
 }
+
+export interface MonthPoint { t: number; contributed: number; value: number; low: number; high: number }
+
+/**
+ * Month-by-month projection from today's value with a constant monthly contribution
+ * (closed-form compound interest; scenario spread narrows with the horizon like `project`).
+ */
+export function projectFrom(opts: { start: number; startDate: Date; contributed: number; monthly: number; months: number; netReturn: number; volatility: number }): MonthPoint[] {
+  const { start, startDate, contributed, monthly, months, netReturn, volatility } = opts;
+  const fv = (annualPct: number, n: number) => {
+    const rm = Math.pow(1 + annualPct / 100, 1 / 12) - 1;
+    const g = Math.pow(1 + rm, n);
+    return start * g + (rm === 0 ? monthly * n : monthly * ((g - 1) / rm) * (1 + rm));
+  };
+  const out: MonthPoint[] = [];
+  for (let n = 1; n <= months; n++) {
+    const d = new Date(startDate);
+    d.setMonth(d.getMonth() + n);
+    const spread = (Z * volatility) / Math.sqrt(Math.max(n / 12, 1));
+    out.push({ t: d.getTime(), contributed: contributed + monthly * n, value: fv(netReturn, n), low: fv(netReturn - spread, n), high: fv(netReturn + spread, n) });
+  }
+  return out;
+}
+
+/** Value-weighted expected net return, cost and volatility for a set of products. */
+export function blend(items: { product: Product; amount: number }[], mode: ReturnMode) {
+  const total = items.reduce((a, b) => a + b.amount, 0) || 1;
+  const fa = items.map(({ product, amount }) => fundAssumption(product, amount / total, mode));
+  return {
+    netReturn: fa.reduce((a, f) => a + f.netReturn * f.weight, 0),
+    cost: fa.reduce((a, f) => a + f.cost * f.weight, 0),
+    volatility: fa.reduce((a, f) => a + f.volatility * f.weight, 0),
+  };
+}

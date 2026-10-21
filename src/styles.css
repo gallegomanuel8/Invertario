@@ -207,7 +207,7 @@ th.num { text-align: right; }
 .kpi, .panel { min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
 .kpi-value { font-size: 1.5rem; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 .panels { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; margin-bottom: 16px; }
-.panel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
+.panel-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
 .panel > .table-wrap { border: 0; }
 .actions { white-space: nowrap; text-align: right; }
 .lots-row > td { background: var(--surface-2); }
@@ -331,6 +331,10 @@ td.num .costbar { margin-left: auto; width: 64px; }
 .donut-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .swatch { width: 12px; height: 12px; border-radius: 3px; }
 .panel-title { margin-bottom: 14px; }
+.head-controls { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.projection-controls { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: end; margin: 10px 0 6px; }
+.projection-controls .field { width: 220px; }
+.composition-panel > p { margin: 0 0 6px; }
 .composition-panel { margin-bottom: 16px; }
 .composition { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
 
@@ -381,6 +385,12 @@ td.num .costbar { margin-left: auto; width: 64px; }
 .key-base { height: 0; border-top: 2px dashed var(--text-2); }
 .series-band { fill: var(--series-1-area); }
 .series-base { fill: none; stroke: var(--text-2); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.series-base-solid { stroke-dasharray: none; }
+.future-zone { fill: var(--surface-2); opacity: 0.5; }
+.today-line { stroke: var(--text-2); stroke-width: 1; }
+.gain-line { stroke: var(--pos); stroke-width: 3; }
+.loss-line { stroke: var(--neg); stroke-width: 3; }
+.key-dot { width: 10px; height: 10px; border-radius: 999px; background: var(--series-1); }
 .table-wrap.flat { box-shadow: none; }
 .years-wrap { overflow-x: auto; max-height: 520px; overflow-y: auto; }
 .years { font-size: 0.85rem; }
@@ -463,6 +473,7 @@ td.num .costbar { margin-left: auto; width: 64px; }
   .brand img { width: 24px; height: 24px; }
   .kpi-value { font-size: 1.2rem; overflow-wrap: anywhere; }
   .kpi { padding: 12px; }
+  .head-controls { width: 100%; justify-content: flex-start; }
   .stat { padding: 10px; }
   .stat-value { font-size: 1.1rem; }
   .platform-list li > span:nth-child(3) { grid-column: 2; }
