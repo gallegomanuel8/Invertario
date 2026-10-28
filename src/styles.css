@@ -421,6 +421,7 @@ td.num .costbar { margin-left: auto; width: 64px; }
 .link:disabled { color: var(--text-2); cursor: not-allowed; }
 
 .pos-platforms { margin-top: 6px; }
+.price-status { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 16px; font-size: 0.9rem; }
 .data-manager section { display: grid; gap: 8px; justify-items: start; }
 .data-manager .errors { margin: 0; width: 100%; }
 .import-preview { display: grid; gap: 8px; background: var(--surface-2); border-radius: var(--radius); padding: 12px; width: 100%; }

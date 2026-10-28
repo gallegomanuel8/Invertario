@@ -11,6 +11,7 @@ Web sencilla para consultar fondos indexados, ETFs y planes de pensiones disponi
 
 - **Fondos no catalogados**: al importar un CSV de un fondo que no está en el catálogo, la web consulta automáticamente `GET /api/fund?isin=…` (función serverless en `api/`, que lee la ficha pública de FT.com y, si no la encuentra, OpenFIGI) para obtener nombre, categoría, gastos corrientes y tipo de activo. Solo se envía el ISIN; el resultado se guarda en el navegador.
 
+- **Valores actualizados**: el CSV es una foto del día en que se descargó. Al abrir Mi cartera (como mucho cada 6 h) o con «Actualizar valores», cada fondo se revalora con su valor liquidativo: `valor hoy = valor del CSV × VL actual / VL del día anterior a la importación` (`GET /api/fund?isin=…&since=AAAA-MM-DD`, datos de FT.com). Solo se envían el ISIN y esa fecha.
 - **Tus datos** (botón ⇅ de la cabecera o enlace del pie): exporta todo lo guardado en el navegador (cartera, carteras simuladas, tema) a un `.json`, impórtalo en otro navegador (combinando o reemplazando) o bórralo todo, con aviso de que no se puede recuperar sin copia.
 
 ## Actualización diaria

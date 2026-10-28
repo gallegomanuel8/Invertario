@@ -93,19 +93,77 @@ export async function lookupFund(isin: string): Promise<FundInfo | null> {
   }
 }
 
+// ---- Prices (valor liquidativo) ----
+
+export interface NavPoint { price: number; date: string } // date: YYYY-MM-DD
+export interface PriceInfo { isin: string; currency: string; current: NavPoint; base: NavPoint | null }
+
+const MONTHS: Record<string, string> = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06', Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' };
+const ftDate = (s: string) => {
+  const m = /([A-Z][a-z]{2})\w* (\d{1,2}),? (\d{4})/.exec(s);
+  return m ? `${m[3]}-${MONTHS[m[1]]}-${m[2].padStart(2, '0')}` : null;
+};
+const ymd = (d: string) => d.replace(/-/g, '/');
+
+/** Latest NAV on or before `since` from FT's historical-prices endpoint (needs FT's internal xid). */
+async function navOnOrBefore(xid: string, since: string): Promise<NavPoint | null> {
+  const start = new Date(since);
+  start.setDate(start.getDate() - 14); // covers weekends and holidays
+  const url = `https://markets.ft.com/data/equities/ajax/get-historical-prices?startDate=${ymd(start.toISOString().slice(0, 10))}&endDate=${ymd(since)}&symbol=${xid}`;
+  const res = await fetch(url, { headers: { 'User-Agent': UA } });
+  if (!res.ok) return null;
+  const { html } = (await res.json()) as { html?: string };
+  let best: NavPoint | null = null;
+  for (const row of (html ?? '').split('</tr>')) {
+    const date = ftDate(row.replace(/<[^>]+>/g, ' '));
+    const cells = [...row.matchAll(/<td>([\d.,]+)<\/td>/g)].map((m) => Number(m[1].replace(/,/g, '')));
+    const close = cells[3];
+    if (date && date <= since && Number.isFinite(close) && (!best || date > best.date)) best = { price: close, date };
+  }
+  return best;
+}
+
+export async function lookupPrices(isin: string, since: string | null): Promise<PriceInfo | null> {
+  for (const ccy of ['EUR', 'USD', 'GBP']) {
+    const res = await fetch(`https://markets.ft.com/data/funds/tearsheet/summary?s=${isin}:${ccy}`, { headers: { 'User-Agent': UA }, redirect: 'manual' });
+    if (res.status !== 200) continue;
+    const html = await res.text();
+    const price = Number(/Price \(([A-Z]{3})\)[\s\S]{0,200}?mod-ui-data-list__value">([\d.,]+)/.exec(html)?.[2]?.replace(/,/g, ''));
+    const date = ftDate(/as of ([A-Z][a-z]{2} \d{1,2} \d{4})/.exec(html)?.[1] ?? '');
+    if (!Number.isFinite(price) || !date) continue;
+    const xid = /&quot;xid&quot;:&quot;(\d+)&quot;/.exec(html)?.[1];
+    const base = since && xid ? await navOnOrBefore(xid, since).catch(() => null) : null;
+    return { isin, currency: ccy, current: { price, date }, base };
+  }
+  return null;
+}
+
 /** Shared HTTP handler (Vercel function and Vite dev middleware). */
 export async function handle(url: URL): Promise<Response> {
   const isin = (url.searchParams.get('isin') ?? '').toUpperCase().trim();
+  // Cache only at Vercel's edge: browsers must not cache (the app already throttles requests, and
+  // browser stale-while-revalidate would fire extra background requests).
   const json = (body: unknown, status: number, cache: string) =>
-    new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': cache } });
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...(cache === 'no-store' ? {} : { 'Vercel-CDN-Cache-Control': cache }) },
+    });
   if (!ISIN_RE.test(isin)) return json({ error: 'ISIN no válido' }, 400, 'no-store');
+  // ?since=YYYY-MM-DD → current NAV plus the NAV on/before that date (to rescale CSV market values).
+  const since = url.searchParams.get('since');
+  if (since !== null) {
+    if (since && !/^\d{4}-\d{2}-\d{2}$/.test(since)) return json({ error: 'Fecha no válida' }, 400, 'no-store');
+    const prices = await lookupPrices(isin, since || null).catch(() => null);
+    if (!prices) return json({ error: 'Sin precio' }, 404, 's-maxage=3600');
+    return json(prices, 200, 's-maxage=3600, stale-while-revalidate=3600');
+  }
   const info = await lookupFund(isin);
   // Cache at the edge for a week: fund metadata changes rarely and this keeps FT.com traffic minimal.
-  if (!info) return json({ error: 'No encontrado' }, 404, 'public, s-maxage=86400');
-  return json(info, 200, 'public, s-maxage=604800, stale-while-revalidate=86400');
+  if (!info) return json({ error: 'No encontrado' }, 404, 's-maxage=86400');
+  return json(info, 200, 's-maxage=604800, stale-while-revalidate=86400');
 }
 
-// GET /api/fund?isin=XX0000000000 → FundInfo. Receives only the ISIN.
+// GET /api/fund?isin=XX0000000000 → FundInfo; with &since=YYYY-MM-DD → PriceInfo. Receives only the ISIN (and a date).
 // Kept in a single file: Vercel runs it as native ESM, where extensionless relative imports fail.
 export function GET(request: Request) {
   return handle(new URL(request.url));

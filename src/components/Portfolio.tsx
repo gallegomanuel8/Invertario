@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { byIsin, cheaperAlternative } from '../data';
 import { fmtDate, fmtEur, fmtEur0, fmtPct, fmtSignedEur, fmtSignedPct } from '../format';
-import { externalProduct, type Holding, LOOKUP_VERSION, loadHoldings, lookupFundInfo, needsLookup, parseHoldingCsv, saveHoldings, sum, totals } from '../portfolio';
+import { externalProduct, fetchNavs, type Holding, LOOKUP_VERSION, navFactor, pricesStale, withLiveValues, loadHoldings, lookupFundInfo, needsLookup, parseHoldingCsv, saveHoldings, sum, totals } from '../portfolio';
 import { assetTypeSlices, blend, projectFrom } from '../simulate';
 import type { ReturnMode } from '../sims';
 import type { Product } from '../types';
@@ -11,6 +11,9 @@ import { BarList, Donut, TimelineChart } from './Charts';
 
 
 const HORIZON_YEARS = 20;
+
+// ISINs whose prices were already requested during this page load (forced refreshes ignore it).
+const priceAttempted = new Set<string>();
 
 // ISINs already looked up during this page load (module-level so remounts don't repeat requests).
 const attempted = new Set<string>();
@@ -39,6 +42,28 @@ export function Portfolio() {
         .finally(() => setLooking((cur) => cur.filter((i) => i !== isin)));
     }
   }, [holdings]);
+
+  // Live values: refresh NAVs automatically when older than PRICE_TTL_MS, or on demand (sends only ISIN + a date).
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshPrices = async (force: boolean) => {
+    const targets = holdings.filter((h) => force || (pricesStale(h) && !priceAttempted.has(h.isin)));
+    if (!targets.length) return;
+    targets.forEach((h) => priceAttempted.add(h.isin));
+    setRefreshing(true);
+    const results = await Promise.allSettled(targets.map((h) => fetchNavs(h).then((r) => ({ isin: h.isin, ...r }))));
+    const ok = new Map(results.flatMap((r) => (r.status === 'fulfilled' ? [[r.value.isin, r.value] as const] : [])));
+    const now = new Date().toISOString();
+    setHoldings((cur) => cur.map((h) => {
+      const r = ok.get(h.isin);
+      // baseNav is fixed at the first successful lookup after an import; only the current NAV moves.
+      if (r) return { ...h, nav: r.nav, baseNav: h.baseNav ?? r.baseNav, navCheckedAt: now };
+      // failed lookups also wait PRICE_TTL_MS before retrying automatically
+      return targets.some((t) => t.isin === h.isin) ? { ...h, navCheckedAt: now } : h;
+    }));
+    setRefreshing(false);
+  };
+  useEffect(() => { refreshPrices(false); }, [holdings.map((h) => h.isin + h.importedAt).join()]); // new or re-imported funds
+
   useEffect(() => {
     if (!removed) return;
     const t = setTimeout(() => setRemoved(null), 8000);
@@ -59,7 +84,11 @@ export function Portfolio() {
     if (parsed.length) {
       setHoldings((cur) => [
         ...cur.filter((h) => !parsed.some((p) => p.isin === h.isin)),
-        ...parsed.map((p) => ({ ...p, name: cur.find((h) => h.isin === p.isin)?.name })),
+        ...parsed.map((p) => {
+          // keep the user's name and the identified fund data; prices restart from the new CSV
+          const prev = cur.find((h) => h.isin === p.isin);
+          return { ...p, name: prev?.name, info: prev?.info, infoCheckedAt: prev?.infoCheckedAt, infoVersion: prev?.infoVersion };
+        }),
       ]);
     }
   }
@@ -71,12 +100,19 @@ export function Portfolio() {
           const catalogProduct = byIsin.get(h.isin);
           const product = catalogProduct ?? (h.info ? externalProduct(h.info) : undefined);
           const name = catalogProduct?.name ?? h.name ?? h.info?.name ?? h.isin;
-          return { h, product, external: !catalogProduct && !!h.info, name, alternative: cheaperAlternative(catalogProduct), ...totals(h.lots) };
+          const live = withLiveValues(h);
+          return {
+            h, live, product, external: !catalogProduct && !!h.info, name, alternative: cheaperAlternative(catalogProduct),
+            sinceCsv: (navFactor(h) - 1) * 100, ...totals(live.lots),
+          };
         })
         .sort((a, b) => b.value - a.value),
     [holdings],
   );
-  const all = totals(holdings.flatMap((h) => h.lots));
+  const all = totals(rows.flatMap((r) => r.live.lots));
+  const latestNav = rows.map((r) => r.h.nav?.date).filter(Boolean).sort().at(-1);
+  const updated = rows.filter((r) => navFactor(r.h) !== 1).length;
+  const noPrice = rows.filter((r) => r.h.navCheckedAt && !r.h.nav).map((r) => r.h.isin);
   const known = rows.filter((r) => r.product?.totalCost != null);
   const weightedCost = known.length ? sum(known.map((r) => r.value * r.product!.totalCost!)) / sum(known.map((r) => r.value)) : null;
 
@@ -168,7 +204,7 @@ export function Portfolio() {
         </div>
         <p className="privacy">
           <span aria-hidden>🔒</span> Tus datos se procesan y guardan <strong>solo en este navegador</strong> y puedes borrarlos cuando quieras.
-          Para identificar fondos que no están en el catálogo se consulta <strong>solo su ISIN</strong> (vía FT.com); nunca importes ni movimientos.{' '}
+          Para actualizar valores e identificar fondos se consulta <strong>solo el ISIN</strong> de cada fondo (vía FT.com); nunca importes ni movimientos.{' '}
           <button className="link" onClick={() => dispatchEvent(new Event(OPEN_DATA_EVENT))}>Exportar o importar tus datos</button>
         </p>
       </div>
@@ -199,6 +235,20 @@ export function Portfolio() {
         <div className="toast" role="status">
           Has quitado «{byIsin.get(removed.holding.isin)?.name ?? removed.holding.name ?? removed.holding.isin}».
           <button className="link" onClick={undoRemove}>Deshacer</button>
+        </div>
+      )}
+
+      {rows.length > 0 && (
+        <div className="price-status" role="status">
+          <span>
+            {refreshing ? 'Actualizando valores con el último valor liquidativo…'
+              : latestNav ? <>Valores actualizados con el valor liquidativo del <strong>{fmtDate(latestNav)}</strong>{updated < rows.length && ` (${updated} de ${rows.length} fondos)`}.</>
+              : 'Valores del CSV importado.'}
+            {!refreshing && noPrice.length > 0 && <span className="muted"> {noPrice.length === 1 ? '1 fondo sin precio' : `${noPrice.length} fondos sin precio`}: se usa el valor del CSV.</span>}
+          </span>
+          <button className="btn" onClick={() => refreshPrices(true)} disabled={refreshing}>
+            {refreshing ? 'Actualizando…' : 'Actualizar valores'}
+          </button>
         </div>
       )}
 
@@ -363,7 +413,14 @@ export function Portfolio() {
                             )}
                           </td>
                           <td data-label="Invertido" className="num">{fmtEur(r.invested)}</td>
-                          <td data-label="Valor" className="num">{fmtEur(r.value)}</td>
+                          <td data-label="Valor" className="num">
+                            {fmtEur(r.value)}
+                            {r.sinceCsv !== 0 && (
+                              <div className="small muted" title={`Valor liquidativo ${r.h.baseNav!.price} → ${r.h.nav!.price} ${r.h.nav!.currency} (${fmtDate(r.h.baseNav!.date)} → ${fmtDate(r.h.nav!.date)})`}>
+                                {fmtSignedPct(r.sinceCsv)} desde el CSV
+                              </div>
+                            )}
+                          </td>
                           <td data-label="Resultado" className={`num ${r.result >= 0 ? 'pos' : 'neg'}`}>
                             {fmtSignedEur(r.result)}<div className="small">{fmtSignedPct(r.pct)}</div>
                           </td>
@@ -381,7 +438,7 @@ export function Portfolio() {
                         {isOpen && (
                           <tr className="lots-row">
                             <td colSpan={7}>
-                              <Lots holding={r.h} />
+                              <Lots holding={r.live} />
                             </td>
                           </tr>
                         )}

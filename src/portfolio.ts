@@ -18,6 +18,9 @@ export interface Holding {
   info?: FundInfo | null; // looked up by ISIN for funds not in the catalog (null = not found)
   infoCheckedAt?: string;
   infoVersion?: number; // bump LOOKUP_VERSION to re-check everything after a lookup fix
+  baseNav?: Nav | null; // NAV when the CSV was exported (fixed until the fund is re-imported)
+  nav?: Nav; // latest NAV
+  navCheckedAt?: string;
   lots: Lot[];
 }
 
@@ -106,4 +109,40 @@ export function externalProduct(info: FundInfo): Product {
     id: `ext-${info.isin}`, type: 'fondo', isin: info.isin, name: info.name,
     assetClass: info.assetClass, region: info.category, totalCost: info.ongoingCharge, ter: info.ongoingCharge, addedAt: null,
   };
+}
+
+// ---- Live values: CSV market values rescaled by the fund's NAV change since the CSV was imported ----
+
+export const PRICE_TTL_MS = 6 * 3_600_000;
+
+export interface Nav { price: number; date: string; currency: string }
+
+/** The CSV has no valuation date; brokers usually value at the previous business day's NAV. */
+export const baseDateFor = (h: Holding) => {
+  const d = new Date(h.importedAt);
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
+};
+
+export const pricesStale = (h: Holding) => Date.now() - new Date(h.navCheckedAt ?? 0).getTime() > PRICE_TTL_MS;
+
+/** Current NAV and the NAV on/before the CSV valuation date. Sends only the ISIN and that date. */
+export async function fetchNavs(h: Holding): Promise<{ nav: Nav; baseNav: Nav | null }> {
+  const res = await fetch(`/api/fund?isin=${encodeURIComponent(h.isin)}&since=${baseDateFor(h)}`);
+  const body = await res.json().catch(() => null);
+  if (!res.ok || !body?.current) throw new Error(`HTTP ${res.status}`);
+  const nav = { ...body.current, currency: body.currency } as Nav;
+  return { nav, baseNav: body.base ? { ...body.base, currency: body.currency } : null };
+}
+
+/** Ratio applied to every lot's CSV market value (units don't change, only the price). 1 when unknown. */
+export function navFactor(h: Holding): number {
+  if (!h.nav || !h.baseNav || h.nav.currency !== h.baseNav.currency || h.baseNav.price <= 0) return 1;
+  return h.nav.date > h.baseNav.date ? h.nav.price / h.baseNav.price : 1;
+}
+
+export function withLiveValues(h: Holding): Holding {
+  const f = navFactor(h);
+  if (f === 1) return h;
+  return { ...h, lots: h.lots.map((l) => ({ ...l, value: l.value * f, result: l.value * f - l.invested })) };
 }
