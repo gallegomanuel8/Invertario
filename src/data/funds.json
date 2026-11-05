@@ -1,8 +1,8 @@
 {
-  "syncedAt": "2026-10-20",
+  "syncedAt": "2026-11-05",
   "source": "https://docs.google.com/spreadsheets/d/1qTBkH0K5zE-e5OXsUo6Prmo2QGmYNWf63Y-iLQqdBaA",
-  "sourceUpdatedAt": "2026-10-13",
-  "returnsAsOf": "2026-09-30",
+  "sourceUpdatedAt": null,
+  "returnsAsOf": "2026-10-30",
   "platforms": [
     "MyInvestor",
     "Openbank",
@@ -56,8 +56,8 @@
       "operatingCosts": 0.01,
       "totalCost": 0.13,
       "index": "MSCI World",
-      "return3y": 18.53,
-      "return5y": 12.33,
+      "return3y": 20.05,
+      "return5y": 11.28,
       "platforms": [
         "MyInvestor",
         "IronIA"
@@ -81,8 +81,8 @@
       "operatingCosts": 0.02,
       "totalCost": 0.14,
       "index": "MSCI World",
-      "return3y": 18.48,
-      "return5y": 12.31,
+      "return3y": 19.99,
+      "return5y": 11.26,
       "platforms": [
         "MyInvestor",
         "IronIA",
@@ -109,8 +109,8 @@
       "operatingCosts": 0.01,
       "totalCost": 0.17,
       "index": "MSCI World",
-      "return3y": 18.48,
-      "return5y": 12.29,
+      "return3y": 20,
+      "return5y": 11.23,
       "platforms": [
         "IronIA",
         "SelfBank"
@@ -134,8 +134,8 @@
       "operatingCosts": 0.01,
       "totalCost": 0.19,
       "index": "MSCI World",
-      "return3y": 18.45,
-      "return5y": 12.24,
+      "return3y": 19.97,
+      "return5y": 11.19,
       "platforms": [
         "MyInvestor",
         "IronIA",
@@ -162,8 +162,8 @@
       "operatingCosts": 0.04,
       "totalCost": 0.24,
       "index": "MSCI World",
-      "return3y": 18.41,
-      "return5y": 12.18,
+      "return3y": 19.96,
+      "return5y": 11.11,
       "platforms": [
         "MyInvestor",
         "IronIA"
@@ -187,8 +187,8 @@
       "operatingCosts": 0.01,
       "totalCost": 0.23,
       "index": "MSCI World",
-      "return3y": 18.23,
-      "return5y": 12.06,
+      "return3y": null,
+      "return5y": null,
       "platforms": [
         "TradeRepublic"
       ],
@@ -207,8 +207,8 @@
       "operatingCosts": 0.04,
       "totalCost": 0.33,
       "index": "MSCI World",
-      "return3y": 18.3,
-      "return5y": 12.06,
+      "return3y": 19.84,
+      "return5y": 11,
       "platforms": [
         "MyInvestor",
         "Openbank",
@@ -235,7 +235,7 @@
       "operatingCosts": 0.04,
       "totalCost": 0.56,
       "index": "MSCI World",
-      "return3y": 17.88,
+      "return3y": 19.95,
       "return5y": null,
       "platforms": [
         "Openbank",
@@ -278,8 +278,8 @@
       "operatingCosts": 0.02,
       "totalCost": 0.22,
       "index": "FTSE Developed All Cap Choice Index",
-      "return3y": 19.06,
-      "return5y": 11.35,
+      "return3y": 20.19,
+      "return5y": 10.02,
       "platforms": [
         "MyInvestor",
         "IronIA",
@@ -302,8 +302,8 @@
       "operatingCosts": 0.06,
       "totalCost": 0.36,
       "index": "MSCI World Small Cap",
-      "return3y": 15.01,
-      "return5y": 7.33,
+      "return3y": 18.25,
+      "return5y": 6.98,
       "platforms": [
         "MyInvestor",
         "IronIA",
@@ -326,8 +326,8 @@
       "operatingCosts": 0.04,
       "totalCost": 0.26,
       "index": "FTSE EPRA/NAREIT DEVELOPED",
-      "return3y": 6.9,
-      "return5y": 0.96,
+      "return3y": 10.11,
+      "return5y": 0.58,
       "platforms": [
         "MyInvestor",
         "IronIA",
@@ -348,8 +348,8 @@
       "operatingCosts": 0.07,
       "totalCost": 0.39,
       "index": "FTSE EPRA/NAREIT DEVELOPED",
-      "return3y": 6.83,
-      "return5y": 0.85,
+      "return3y": 9.98,
+      "return5y": 0.48,
       "platforms": [
         "MyInvestor",
         "Openbank",
@@ -372,8 +372,8 @@
       "operatingCosts": 0.01,
       "totalCost": 0.09,
       "index": "MSCI North America",
-      "return3y": 19.55,
-      "return5y": 13.25,
+      "return3y": 20.91,
+      "return5y": 11.91,
       "platforms": [
         "MyInvestor",
         "TradeRepublic"
@@ -397,8 +397,8 @@
       "operatingCosts": 0.02,
       "totalCost": 0.24,
       "index": "MSCI North America (custom 4pm LUX)",
-      "return3y": 19.26,
-      "return5y": 12.87,
+      "return3y": 21.32,
+      "return5y": 11.98,
       "platforms": [
         "MyInvestor",
         "IronIA",
@@ -419,8 +419,8 @@
       "operatingCosts": 0.02,
       "totalCost": 0.3,
       "index": "MSCI North America ESG Broad CTB Select Index",
-      "return3y": 18.24,
-      "return5y": 12.2,
+      "return3y": 19.57,
+      "return5y": 10.81,
       "platforms": [
         "MyInvestor",
         "Openbank",
@@ -447,8 +447,8 @@
       "operatingCosts": 0,
       "totalCost": 0.06,
       "index": "S&P 500",
-      "return3y": 19.48,
-      "return5y": 13.74,
+      "return3y": 20.65,
+      "return5y": 12.36,
       "platforms": [
         "MyInvestor",
         "IronIA",
@@ -475,8 +475,8 @@
       "operatingCosts": 0.01,
       "totalCost": 0.11,
       "index": "S&P 500",
-      "return3y": 19.43,
-      "return5y": 13.66,
+      "return3y": 20.6,
+      "return5y": 12.29,
       "platforms": [
         "MyInvestor",
         "IronIA",
@@ -502,8 +502,8 @@
       "operatingCosts": 0.01,
       "totalCost": 0.45,
       "index": "S&P 500",
-      "return3y": 19.07,
-      "return5y": 13.31,
+      "return3y": 20.24,
+      "return5y": 11.94,
       "platforms": [
         "IronIA",
         "Renta 4"
@@ -523,8 +523,8 @@
       "operatingCosts": 0.05,
       "totalCost": 0.15,
       "index": "MSCI Europe",
-      "return3y": 15.13,
-      "return5y": 10.27,
+      "return3y": 17.4,
+      "return5y": 9.74,
       "platforms": [
         "MyInvestor",
         "TradeRepublic"
@@ -548,8 +548,8 @@
       "operatingCosts": 0.02,
       "totalCost": 0.14,
       "index": "MSCI Europe",
-      "return3y": 15.13,
-      "return5y": 10.24,
+      "return3y": 17.31,
+      "return5y": 9.65,
       "platforms": [
         "MyInvestor",
         "IronIA",
@@ -575,8 +575,8 @@
       "operatingCosts": 0.18,
       "totalCost": 0.28,
       "index": "MSCI Europe",
-      "return3y": 15,
-      "return5y": 10.16,
+      "return3y": 17.26,
+      "return5y": 9.61,
       "platforms": [
         "MyInvestor",
         "TradeRepublic",
@@ -602,8 +602,8 @@
       "operatingCosts": 0.07,
       "totalCost": 0.22,
       "index": "MSCI Europe",
-      "return3y": 14.91,
-      "return5y": 10.09,
+      "return3y": 17.29,
+      "return5y": 9.65,
       "platforms": [
         "MyInvestor",
         "IronIA"
@@ -627,8 +627,8 @@
       "operatingCosts": 0.05,
       "totalCost": 0.34,
       "index": "MSCI Europe",
-      "return3y": 14.93,
-      "return5y": 10.05,
+      "return3y": 17.19,
+      "return5y": 9.52,
       "platforms": [
         "MyInvestor",
         "IronIA"
@@ -652,8 +652,8 @@
       "operatingCosts": 0.07,
       "totalCost": 0.36,
       "index": "MSCI Europe",
-      "return3y": 14.74,
-      "return5y": 9.93,
+      "return3y": 17.11,
+      "return5y": 9.49,
       "platforms": [
         "MyInvestor",
         "Openbank",
@@ -680,8 +680,8 @@
       "operatingCosts": 0.04,
       "totalCost": 0.3,
       "index": "MSCI Europe",
-      "return3y": 14.7,
-      "return5y": 10.07,
+      "return3y": 17.13,
+      "return5y": 9.55,
       "platforms": [
         "SelfBank"
       ],
@@ -700,8 +700,8 @@
       "operatingCosts": 0.03,
       "totalCost": 0.47,
       "index": "MSCI Europe",
-      "return3y": 14.6,
-      "return5y": 9.75,
+      "return3y": 16.89,
+      "return5y": 9.21,
       "platforms": [
         "IronIA",
         "Renta 4"
@@ -721,8 +721,8 @@
       "operatingCosts": 0.04,
       "totalCost": 0.59,
       "index": "MSCI Europe",
-      "return3y": 14.36,
-      "return5y": 9.74,
+      "return3y": 16.78,
+      "return5y": 9.23,
       "platforms": [
         "Openbank",
         "IronIA",
@@ -745,8 +745,8 @@
       "operatingCosts": 0.05,
       "totalCost": 0.19,
       "index": "FTSE Developed Europe Choice Index",
-      "return3y": 13.88,
-      "return5y": 9.11,
+      "return3y": 16.2,
+      "return5y": 8.66,
       "platforms": [
         "IronIA",
         "TradeRepublic",
@@ -768,8 +768,8 @@
       "operatingCosts": 0.04,
       "totalCost": 0.16,
       "index": "MSCI EMU",
-      "return3y": 17.85,
-      "return5y": 11.01,
+      "return3y": 18.56,
+      "return5y": 9.75,
       "platforms": [
         "MyInvestor",
         "IronIA",
@@ -795,8 +795,8 @@
       "operatingCosts": 0.09,
       "totalCost": 0.42,
       "index": "MSCI EMU",
-      "return3y": 17.68,
-      "return5y": 10.86,
+      "return3y": 18.4,
+      "return5y": 9.63,
       "platforms": [
         "MyInvestor",
         "IronIA",
@@ -821,8 +821,8 @@
       "operatingCosts": 0.1,
       "totalCost": 0.56,
       "index": "MSCI EMU",
-      "return3y": 17.46,
-      "return5y": 10.62,
+      "return3y": 18.2,
+      "return5y": 9.37,
       "platforms": [
         "IronIA",
         "Renta 4"
@@ -846,8 +846,8 @@
       "operatingCosts": 0.02,
       "totalCost": 0.17,
       "index": "MSCI Japan",
-      "return3y": 18.5,
-      "return5y": 10.12,
+      "return3y": 19.29,
+      "return5y": 10.29,
       "platforms": [
         "MyInvestor",
         "TradeRepublic"
@@ -871,8 +871,8 @@
       "operatingCosts": 0.02,
       "totalCost": 0.12,
       "index": "MSCI Japan",
-      "return3y": 18.48,
-      "return5y": 10.12,
+      "return3y": 19.25,
+      "return5y": 10.27,
       "platforms": [
         "MyInvestor",
         "TradeRepublic",
@@ -898,8 +898,8 @@
       "operatingCosts": 0.02,
       "totalCost": 0.19,
       "index": "MSCI Japan",
-      "return3y": 18.46,
-      "return5y": 10.09,
+      "return3y": 19.26,
+      "return5y": 10.26,
       "platforms": [
         "MyInvestor",
         "IronIA",
@@ -924,8 +924,8 @@
       "operatingCosts": 0.01,
       "totalCost": 0.17,
       "index": "MSCI Japan",
-      "return3y": 18.43,
-      "return5y": 10.07,
+      "return3y": 19.23,
+      "return5y": 10.23,
       "platforms": [
         "MyInvestor",
         "IronIA",
@@ -951,8 +951,8 @@
       "operatingCosts": 0.01,
       "totalCost": 0.44,
       "index": "MSCI Japan",
-      "return3y": 18.13,
-      "return5y": 9.83,
+      "return3y": 18.92,
+      "return5y": 9.95,
       "platforms": [
         "IronIA",
         "Renta 4"
@@ -972,8 +972,8 @@
       "operatingCosts": 0.05,
       "totalCost": 0.2,
       "index": "MSCI Pacific ex Japan",
-      "return3y": 13.35,
-      "return5y": 7.4,
+      "return3y": 16.07,
+      "return5y": 7.25,
       "platforms": [
         "MyInvestor",
         "TradeRepublic"
@@ -997,8 +997,8 @@
       "operatingCosts": 0.05,
       "totalCost": 0.25,
       "index": "MSCI Pacific ex Japan",
-      "return3y": 13.31,
-      "return5y": 7.36,
+      "return3y": 16.03,
+      "return5y": 7.21,
       "platforms": [
         "MyInvestor",
         "IronIA",
@@ -1023,8 +1023,8 @@
       "operatingCosts": 0.03,
       "totalCost": 0.19,
       "index": "MSCI Pacific ex Japan",
-      "return3y": 13.32,
-      "return5y": 7.35,
+      "return3y": 16.01,
+      "return5y": 7.2,
       "platforms": [
         "MyInvestor",
         "IronIA",
@@ -1051,8 +1051,8 @@
       "operatingCosts": 0.04,
       "totalCost": 0.48,
       "index": "MSCI Pacific ex Japan",
-      "return3y": 13.01,
-      "return5y": 7.08,
+      "return3y": 15.71,
+      "return5y": 6.93,
       "platforms": [
         "IronIA",
         "Renta 4"
@@ -1096,8 +1096,8 @@
       "operatingCosts": 0.06,
       "totalCost": 0.26,
       "index": "MSCI Emerging Markets",
-      "return3y": null,
-      "return5y": 9.27,
+      "return3y": 20.25,
+      "return5y": 7.59,
       "platforms": [
         "MyInvestor",
         "TradeRepublic"
@@ -1121,8 +1121,8 @@
       "operatingCosts": 0.04,
       "totalCost": 0.24,
       "index": "MSCI Emerging Markets",
-      "return3y": 20.78,
-      "return5y": 9.13,
+      "return3y": 20.3,
+      "return5y": 7.6,
       "platforms": [
         "MyInvestor",
         "IronIA"
@@ -1146,8 +1146,8 @@
       "operatingCosts": 0.1,
       "totalCost": 0.33,
       "index": "MSCI Emerging Markets",
-      "return3y": 21.03,
-      "return5y": 9.27,
+      "return3y": 19.97,
+      "return5y": 7.52,
       "platforms": [
         "MyInvestor",
         "IronIA",
@@ -1174,8 +1174,8 @@
       "operatingCosts": 0.06,
       "totalCost": 0.38,
       "index": "MSCI Emerging Markets",
-      "return3y": null,
-      "return5y": 9.14,
+      "return3y": 20.1,
+      "return5y": 7.45,
       "platforms": [
         "MyInvestor",
         "IronIA"
@@ -1199,8 +1199,8 @@
       "operatingCosts": 0.05,
       "totalCost": 0.25,
       "index": "MSCI Emerging Markets",
-      "return3y": 20.96,
-      "return5y": 9.18,
+      "return3y": 19.81,
+      "return5y": 7.47,
       "platforms": [
         "MyInvestor",
         "IronIA",
@@ -1227,8 +1227,8 @@
       "operatingCosts": 0.07,
       "totalCost": 0.5,
       "index": "MSCI Emerging Markets",
-      "return3y": 20.47,
-      "return5y": 8.85,
+      "return3y": 20,
+      "return5y": 7.33,
       "platforms": [
         "MyInvestor",
         "Openbank",
@@ -1255,8 +1255,8 @@
       "operatingCosts": 0.07,
       "totalCost": 0.65,
       "index": "MSCI Emerging Markets",
-      "return3y": 20.62,
-      "return5y": 8.83,
+      "return3y": 19.51,
+      "return5y": 7.16,
       "platforms": [
         "IronIA",
         "Renta 4"
@@ -1276,8 +1276,8 @@
       "operatingCosts": 0.1,
       "totalCost": 0.35,
       "index": "FTSE Emerging All Cap Choice Index",
-      "return3y": 16.78,
-      "return5y": 7.36,
+      "return3y": 16.31,
+      "return5y": 6,
       "platforms": [
         "MyInvestor",
         "IronIA",
@@ -1387,8 +1387,8 @@
       "operatingCosts": 0,
       "totalCost": 0.1,
       "index": "FTSE EMU Government Bond Index",
-      "return3y": 1.99,
-      "return5y": -3.03,
+      "return3y": 2.21,
+      "return5y": -2.71,
       "platforms": [
         "MyInvestor",
         "TradeRepublic"
@@ -1408,8 +1408,8 @@
       "operatingCosts": 0.05,
       "totalCost": 0.17,
       "index": "Bloomberg Barclays Euro Government Float Adjusted Bond",
-      "return3y": 2.03,
-      "return5y": -2.9,
+      "return3y": 2.23,
+      "return5y": -2.58,
       "platforms": [
         "MyInvestor",
         "IronIA",
@@ -1544,8 +1544,8 @@
       "operatingCosts": 0,
       "totalCost": 0.13,
       "index": "Markit iBoxx Eurozone AAA Index",
-      "return3y": 0.97,
-      "return5y": -3.57,
+      "return3y": 1.53,
+      "return5y": -3.18,
       "platforms": [
         "MyInvestor",
         "IronIA"
@@ -1612,8 +1612,8 @@
       "operatingCosts": 0.05,
       "totalCost": 0.19,
       "index": "Bloomberg Euro Treasury 50bn Bond Index",
-      "return3y": 1.86,
-      "return5y": -2.97,
+      "return3y": 2.09,
+      "return5y": -2.63,
       "platforms": [
         "MyInvestor",
         "IronIA"
@@ -1719,8 +1719,8 @@
       "operatingCosts": 0.04,
       "totalCost": 0.38,
       "index": "Bloomberg Euro Treasury 50bn Bond Index",
-      "return3y": 1.65,
-      "return5y": -3.16,
+      "return3y": 1.88,
+      "return5y": -2.82,
       "platforms": [
         "MyInvestor",
         "Openbank",
@@ -1767,8 +1767,8 @@
       "operatingCosts": 0,
       "totalCost": 0.39,
       "index": "Bloomberg Barclays Global Treasury Bond \"Euro Core\" Index",
-      "return3y": 0.52,
-      "return5y": -4.05,
+      "return3y": 0.8,
+      "return5y": -3.8,
       "platforms": [
         "MyInvestor",
         "Openbank",
@@ -1789,8 +1789,8 @@
       "operatingCosts": 0.02,
       "totalCost": 0.41,
       "index": "FTSE EMU Government Bond Index",
-      "return3y": 1.7,
-      "return5y": -3.24,
+      "return3y": 1.91,
+      "return5y": -2.92,
       "platforms": [
         "MyInvestor",
         "Openbank",
@@ -1859,8 +1859,8 @@
       "operatingCosts": 0.01,
       "totalCost": 0.13,
       "index": "Barclays Global Inflation-Linked: Eurozone - Euro CPI",
-      "return3y": 2.03,
-      "return5y": -0.5,
+      "return3y": 2.22,
+      "return5y": -0.36,
       "platforms": [
         "MyInvestor",
         "IronIA",
@@ -1883,8 +1883,8 @@
       "operatingCosts": 0,
       "totalCost": 0.1,
       "index": "Barclays Euro Government Inflation-Linked Bond Index",
-      "return3y": 1.82,
-      "return5y": -0.5,
+      "return3y": 1.98,
+      "return5y": -0.39,
       "platforms": [
         "MyInvestor",
         "IronIA",
@@ -1905,8 +1905,8 @@
       "operatingCosts": 0,
       "totalCost": 0.13,
       "index": "Barclays Euro Government Inflation-Linked Bond Index",
-      "return3y": 1.79,
-      "return5y": -0.53,
+      "return3y": 1.95,
+      "return5y": -0.42,
       "platforms": [
         "MyInvestor",
         "Openbank",
