@@ -1,7 +1,7 @@
 {
-  "syncedAt": "2026-11-05",
+  "syncedAt": "2026-11-10",
   "source": "https://docs.google.com/spreadsheets/d/1qTBkH0K5zE-e5OXsUo6Prmo2QGmYNWf63Y-iLQqdBaA",
-  "sourceUpdatedAt": null,
+  "sourceUpdatedAt": "2026-11-10",
   "returnsAsOf": "2026-10-30",
   "platforms": [
     "MyInvestor",
@@ -261,6 +261,7 @@
       "return3y": null,
       "return5y": null,
       "platforms": [
+        "MyInvestor",
         "IronIA"
       ],
       "securitiesLending": null,
