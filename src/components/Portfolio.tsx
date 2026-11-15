@@ -7,6 +7,8 @@ import type { ReturnMode } from '../sims';
 import type { Product } from '../types';
 import { OPEN_DATA_EVENT } from '../backup';
 import { AssetTag, useDismissDetails } from './bits';
+import { ProductDetail } from './ProductDetail';
+import { Sheet } from './Sheet';
 import { BarList, Donut, TimelineChart } from './Charts';
 
 
@@ -117,7 +119,7 @@ export function Portfolio() {
       active
         .map((h) => {
           const catalogProduct = byIsin.get(h.isin);
-          const product = catalogProduct ?? (h.info ? externalProduct(h.info) : undefined);
+          const product = catalogProduct ?? (h.info ? externalProduct(h.info, h.infoCheckedAt) : undefined);
           const name = catalogProduct?.name ?? h.name ?? h.info?.name ?? h.isin;
           const live = withLiveValues(h);
           return {
@@ -240,6 +242,7 @@ export function Portfolio() {
     setHoldings((cur) => cur.map((h) => (h === t.from ? { ...h, notTransferTo: [...(h.notTransferTo ?? []), t.to.isin] } : h)));
   const productName = (h: Holding) => byIsin.get(h.isin)?.name ?? h.name ?? h.info?.name ?? h.isin;
 
+  const [detail, setDetail] = useState<Product | null>(null);
   const privacyRef = useRef<HTMLDetailsElement>(null);
   useDismissDetails(privacyRef);
 
@@ -465,14 +468,13 @@ export function Portfolio() {
                 </thead>
                 <tbody>
                   {rows.map((r) => {
-                    const link = r.external ? r.h.info?.url : r.product && `#/?f=${encodeURIComponent(r.product.id)}`;
                     const isOpen = open === r.h.isin;
                     return (
                       <Fragment key={r.h.isin}>
                         <tr>
                           <td data-label="Fondo" className="name-cell">
                             <div className="name">
-                              {link ? <a href={link} {...(r.external ? { target: '_blank', rel: 'noreferrer' } : {})}>{r.name}</a> : r.name}
+                              {r.product ? <button className="link name-link" onClick={() => setDetail({ ...r.product!, name: r.name })}>{r.name}</button> : r.name}
                               {r.external && <span className="badge-ext" title={`Datos obtenidos de ${r.h.info!.source} a partir del ISIN`}>vía {r.h.info!.source}</span>}
                             </div>
                             <div className="muted small">
@@ -502,7 +504,7 @@ export function Portfolio() {
                             {r.alternative && (
                               <div className="alt small">
                                 <span aria-hidden>💡</span> Mismo índice más barato:{' '}
-                                <a href={`#/?f=${encodeURIComponent(r.alternative.id)}`}>{r.alternative.name}</a>{' '}
+                                <button className="link" onClick={() => setDetail(r.alternative!)}>{r.alternative.name}</button>{' '}
                                 ({fmtPct(r.alternative.totalCost)} frente a {fmtPct(r.product!.totalCost)}
                                 {r.alternative.platforms?.length ? `; en ${r.alternative.platforms.join(', ')}` : ''})
                               </div>
@@ -551,6 +553,9 @@ export function Portfolio() {
           </div>
         </>
       )}
+      <Sheet open={detail != null} onClose={() => setDetail(null)} title={detail?.name}>
+        {detail && <ProductDetail p={detail} onSelect={setDetail} />}
+      </Sheet>
     </section>
   );
 }

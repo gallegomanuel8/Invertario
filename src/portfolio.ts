@@ -299,8 +299,9 @@ export const needsLookup = (h: Holding, inCatalog: boolean) =>
     (h.info === null && (h.infoVersion !== LOOKUP_VERSION || Date.now() - new Date(h.infoCheckedAt ?? 0).getTime() > RETRY_MS)));
 
 /** Catalog-shaped product built from looked-up data, so costs and asset type work like catalog funds. */
-export function externalProduct(info: FundInfo): Product {
+export function externalProduct(info: FundInfo, checkedAt?: string): Product {
   return {
+    external: { source: info.source, url: info.url, domicile: info.domicile, checkedAt: checkedAt ?? new Date().toISOString() },
     id: `ext-${info.isin}`, type: info.kind === 'stock' ? 'accion' : 'fondo', isin: info.isin, name: info.name,
     assetClass: info.assetClass, region: info.category, totalCost: info.ongoingCharge, ter: info.ongoingCharge, addedAt: null,
   };

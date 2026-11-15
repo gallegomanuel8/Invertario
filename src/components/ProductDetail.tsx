@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { catalog, isNew, productLink, sameIndex } from '../data';
-import { removeExternal } from '../external';
+import { removeExternal, useExternal } from '../external';
 import { fmtDate, fmtPct, fmtRawPct } from '../format';
 import type { Product } from '../types';
 import { AddToSim } from './AddToSim';
@@ -10,10 +10,11 @@ import { PriceChart } from './Charts';
 export function ProductDetail({ p, onSelect, compared, onToggleCompare }: {
   p: Product;
   onSelect: (p: Product) => void;
-  compared: boolean;
-  onToggleCompare: (p: Product) => void;
+  compared?: boolean;
+  onToggleCompare?: (p: Product) => void; // omitted where there is no comparator (Mi cartera)
 }) {
   const link = productLink(p);
+  const saved = useExternal().some((x) => x.id === p.id); // looked up in the catalog (not just identified in Mi cartera)
   const similar = sameIndex(p).slice(0, 6);
   const cheaperCount = similar.filter((s) => s.totalCost != null && p.totalCost != null && s.totalCost < p.totalCost).length;
 
@@ -142,16 +143,18 @@ export function ProductDetail({ p, onSelect, compared, onToggleCompare }: {
 
       <div className="detail-actions">
         <AddToSim p={p} />
-        <button className="btn" aria-pressed={compared} onClick={() => onToggleCompare(p)}>
-          {compared ? '✓ En el comparador' : '+ Añadir al comparador'}
-        </button>
+        {onToggleCompare && (
+          <button className="btn" aria-pressed={compared} onClick={() => onToggleCompare(p)}>
+            {compared ? '✓ En el comparador' : '+ Añadir al comparador'}
+          </button>
+        )}
         {link && <a className="btn btn-primary" href={link} target="_blank" rel="noreferrer">Ver en {p.type === 'etf' || p.type === 'alt' ? 'justETF' : p.type === 'accion' ? 'FT.com' : 'Morningstar'} ↗</a>}
       </div>
       {p.curated && p.type !== 'alt' && (
         <p className="muted small">Añadido por Invertario (no está en la hoja comunitaria){p.exchange && `; cotiza en ${p.exchange}`}.</p>
       )}
       {p.addedAt && <p className="muted small">En Invertario desde el {fmtDate(p.addedAt)}.</p>}
-      {p.external && (
+      {saved && (
         <p className="small"><button className="link" onClick={() => removeExternal(p.id)}>Olvidar este producto</button> <span className="muted">(se quitará de este navegador)</span></p>
       )}
     </div>
@@ -192,7 +195,7 @@ function PriceHistory({ isin, type }: { isin: string; type: Product['type'] }) {
   useEffect(() => {
     let live = true;
     fetchHistory(isin).then(
-      (data) => live && setState(data && data.points.length > 1 ? { status: 'ok', data } : { status: 'none' }),
+      (data) => live && setState(data && Array.isArray(data.points) && data.points.length > 1 ? { status: 'ok', data } : { status: 'none' }),
       () => live && setState({ status: 'error' }),
     );
     return () => { live = false; };

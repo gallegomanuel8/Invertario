@@ -7,3 +7,6 @@ dist/
 # Datos personales (CSV de plusvalías/minusvalías)
 csv de ejemplo*/
 *.tsbuildinfo
+
+# Stray screenshots/test output in the project root
+/*.png

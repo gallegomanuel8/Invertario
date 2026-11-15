@@ -551,3 +551,5 @@ td.num .costbar { margin-left: auto; width: 64px; }
 .price-history-head h3 { margin: 0; }
 .price-history .chart { margin-top: 4px; }
 .price-area { fill: var(--series-1-area); }
+.name .name-link { color: var(--text); font: inherit; font-weight: inherit; padding: 0; text-align: left; cursor: pointer; }
+.name .name-link:hover, .name .name-link:focus-visible { color: var(--accent); text-decoration: underline; }
