@@ -1,4 +1,5 @@
-export type ProductType = 'fondo' | 'etf' | 'plan' | 'alt';
+// 'accion': listed shares, only as products looked up by ISIN (never in the catalog).
+export type ProductType = 'fondo' | 'etf' | 'plan' | 'alt' | 'accion';
 
 export interface Product {
   id: string;

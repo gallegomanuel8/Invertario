@@ -295,3 +295,84 @@ export function TimelineChart({ past, today, future, label }: {
     </div>
   );
 }
+
+export interface PricePoint { t: number; price: number }
+
+/** Price line for a product page: one series, axis fitted to the range (not zero-based), crosshair tooltip. */
+export function PriceChart({ points, currency, label }: { points: PricePoint[]; currency: string; label: string }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const [width, setWidth] = useState(520);
+  const box = useRef<HTMLDivElement>(null);
+  const ref = useRef<SVGSVGElement>(null);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setWidth(Math.max(240, Math.round(entry.contentRect.width))));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const fmtPrice = (v: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency, maximumFractionDigits: v >= 1000 ? 0 : 2 }).format(v);
+  const W = width, H = width < 480 ? 180 : 210, pad = { l: 58, r: 12, t: 10, b: 26 };
+  const t0 = points[0].t, t1 = Math.max(points.at(-1)!.t, t0 + 1);
+  const lo = Math.min(...points.map((p) => p.price)), hi = Math.max(...points.map((p) => p.price));
+  const span = hi - lo || hi * 0.1 || 1;
+  const min = lo - span * 0.08, max = hi + span * 0.08;
+  const x = (t: number) => pad.l + ((t - t0) / (t1 - t0)) * (W - pad.l - pad.r);
+  const y = (v: number) => pad.t + (1 - (v - min) / (max - min)) * (H - pad.t - pad.b);
+  const path = points.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.price).toFixed(1)}`).join(' ');
+  const area = `${path} L${x(t1)},${H - pad.b} L${x(t0)},${H - pad.b} Z`;
+  // Round tick values (1, 2, 2.5 or 5 × 10^n) inside the plotted range.
+  const raw = (max - min) / 4, mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((v) => v >= raw)!;
+  const ticks: number[] = [];
+  for (let v = Math.ceil(min / step) * step; v <= max; v += step) ticks.push(v);
+  const months = (t1 - t0) / (30.44 * 86_400_000);
+  const ticksX: { t: number; label: string }[] = [];
+  if (months > 24) {
+    for (let yr = new Date(t0).getFullYear() + 1; yr <= new Date(t1).getFullYear(); yr++) ticksX.push({ t: new Date(yr, 0, 1).getTime(), label: String(yr) });
+  } else {
+    const every = Math.max(1, Math.ceil(months / (W < 480 ? 4 : 6)));
+    const fmt = new Intl.DateTimeFormat('es-ES', { month: 'short', year: '2-digit' });
+    const d = new Date(t0); d.setDate(1); d.setMonth(d.getMonth() + 1);
+    for (; d.getTime() <= t1; d.setMonth(d.getMonth() + every)) ticksX.push({ t: d.getTime(), label: fmt.format(d) });
+  }
+  const onMove = (e: React.PointerEvent) => {
+    const rect = ref.current!.getBoundingClientRect();
+    const px = ((e.clientX - rect.left) / rect.width) * W;
+    let best = 0;
+    points.forEach((p, i) => { if (Math.abs(x(p.t) - px) < Math.abs(x(points[best].t) - px)) best = i; });
+    setHover(best);
+  };
+  const hp = hover != null ? points[hover] : null;
+  const first = points[0].price;
+
+  return (
+    <div className="chart" ref={box}>
+      <svg ref={ref} viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label={label}
+        onPointerMove={onMove} onPointerLeave={() => setHover(null)}>
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={pad.l} x2={W - pad.r} y1={y(t)} y2={y(t)} className="grid" />
+            <text x={pad.l - 8} y={y(t)} className="axis" textAnchor="end" dominantBaseline="middle">{fmtPrice(t)}</text>
+          </g>
+        ))}
+        {ticksX.map((tk) => <text key={tk.t} x={x(tk.t)} y={H - 6} className="axis" textAnchor="middle">{tk.label}</text>)}
+        <path d={area} className="price-area" />
+        <path d={path} className="series-line" />
+        {hp && (
+          <g>
+            <line x1={x(hp.t)} x2={x(hp.t)} y1={pad.t} y2={H - pad.b} className="crosshair" />
+            <circle cx={x(hp.t)} cy={y(hp.price)} r={4} className="series-dot" />
+          </g>
+        )}
+      </svg>
+      {hp && (
+        <div className="tooltip" style={{ left: `${Math.min(80, Math.max(20, (x(hp.t) / W) * 100))}%`, top: 4 }}>
+          <div className="muted small">Semana del {new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }).format(hp.t)}</div>
+          <div><strong>{fmtPrice(hp.price)}</strong> <span className="small muted">{hp.price >= first ? '+' : ''}{((hp.price / first - 1) * 100).toLocaleString('es-ES', { maximumFractionDigits: 1 })} % en el periodo</span></div>
+        </div>
+      )}
+    </div>
+  );
+}

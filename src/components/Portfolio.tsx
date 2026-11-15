@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { byIsin, cheaperAlternative } from '../data';
 import { fmtDate, fmtEur, fmtEur0, fmtPct, fmtSignedEur, fmtSignedPct } from '../format';
-import { detectTransfers, externalProduct, fetchNavs, type Folio, type Holding, loadFolios, LOOKUP_VERSION, lookupFundInfo, mergeImport, navFactor, needsLookup, newFolioId, parseHoldingCsv, pricesStale, saveFolios, sum, totals, type Transfer, withLiveValues } from '../portfolio';
+import { detectTransfers, externalProduct, fetchNavs, type Folio, type Holding, loadFolios, LOOKUP_VERSION, lookupFundInfo, mergeImport, navFactor, needsLookup, newFolioId, parseCsvFile, pricesStale, saveFolios, sum, totals, type Transfer, withLiveValues } from '../portfolio';
 import { assetTypeSlices, blend, projectFrom } from '../simulate';
 import type { ReturnMode } from '../sims';
 import type { Product } from '../types';
@@ -11,6 +11,7 @@ import { BarList, Donut, TimelineChart } from './Charts';
 
 
 const HORIZON_YEARS = 20;
+const fmtShares = (n: number) => n.toLocaleString('es-ES', { maximumFractionDigits: 6 });
 
 // Holdings (ISIN@import) whose prices were already requested during this page load (forced refreshes ignore it).
 const priceAttempted = new Set<string>();
@@ -85,19 +86,24 @@ export function Portfolio() {
   async function importFiles(files: FileList | File[]) {
     const errs: string[] = [];
     const parsed: Holding[] = [];
+    const skipped: string[] = [];
     for (const f of Array.from(files)) {
       try {
-        parsed.push(parseHoldingCsv(f.name, await f.text(), f.lastModified));
+        const r = parseCsvFile(f.name, await f.text(), f.lastModified);
+        parsed.push(...r.holdings);
+        skipped.push(...r.skipped);
       } catch (e) {
         errs.push((e as Error).message);
       }
     }
     setErrors(errs);
-    if (!parsed.length) return setNotices([]);
+    const skippedNote = skipped.length ? `No se pueden seguir sin cotización por ISIN (criptomonedas compradas directamente): ${skipped.join(', ')}.` : null;
+    if (!parsed.length) return setNotices(skippedNote ? [skippedNote] : []);
     const { holdings: next, duplicates, stale } = mergeImport(holdings, parsed);
     const notes: string[] = [];
     if (duplicates) notes.push(`${duplicates === 1 ? 'Un fondo venía' : `${duplicates} fondos venían`} en dos archivos (p. ej. «… 2.csv»): se ha usado el más reciente.`);
     if (stale.length) notes.push(`${stale.length === 1 ? `«${stale[0]}» es más antiguo` : `${stale.length} archivos son más antiguos`} que lo ya importado: se mantiene lo actual.`);
+    if (skippedNote) notes.push(skippedNote);
     setNotices(notes);
     setHoldings(next);
   }
@@ -488,7 +494,9 @@ export function Portfolio() {
                               <div className="platforms pos-platforms" aria-label="Disponible en">
                                 {byIsin.get(r.h.isin)!.platforms!.map((pl) => <span key={pl} className="pill">{pl}</span>)}
                               </div>
-                            ) : byIsin.has(r.h.isin) ? null : (
+                            ) : byIsin.has(r.h.isin) ? null : r.h.broker ? (
+                              <div className="muted small pos-platforms">Comprado en {r.h.broker}</div>
+                            ) : (
                               <div className="muted small pos-platforms">Plataformas: sin datos (fondo fuera del catálogo)</div>
                             )}
                             {r.alternative && (
@@ -503,7 +511,11 @@ export function Portfolio() {
                           <td data-label="Invertido" className="num">{fmtEur(r.invested)}</td>
                           <td data-label="Valor" className="num">
                             {fmtEur(r.value)}
-                            {r.sinceCsv !== 0 && (
+                            {r.h.broker && r.h.nav?.currency === 'EUR' ? (
+                              <div className="small muted" title={`Cotización de ${fmtDate(r.h.nav.date)}`}>
+                                {fmtShares(sum(r.h.lots.map((l) => l.shares ?? 0)))} × {fmtEur(r.h.nav.price)}
+                              </div>
+                            ) : r.sinceCsv !== 0 && r.h.baseNav && (
                               <div className="small muted" title={`Valor liquidativo ${r.h.baseNav!.price} → ${r.h.nav!.price} ${r.h.nav!.currency} (${fmtDate(r.h.baseNav!.date)} → ${fmtDate(r.h.nav!.date)})`}>
                                 {fmtSignedPct(r.sinceCsv)} desde el CSV
                               </div>
@@ -593,20 +605,24 @@ function Kpi({ label, value, sub, tone, wide }: { label: string; value: string; 
 
 function Lots({ holding }: { holding: Holding }) {
   const losing = holding.lots.filter((l) => l.result < 0);
+  const shares = holding.lots.some((l) => l.shares != null);
   return (
     <div className="lots">
       <p className="muted small">
-        {holding.lots.length} lotes (FIFO) · {losing.length} en pérdidas por {fmtEur(-sum(losing.map((l) => l.result)))} ·
-        importado de «{holding.fileName}» el {fmtDate(holding.importedAt)}
+        {holding.lots.length} lotes (FIFO) ·{losing.length > 0 && ` ${losing.length} en pérdidas por ${fmtEur(-sum(losing.map((l) => l.result)))} ·`}
+        {holding.dividends ? ` dividendos netos cobrados ${fmtEur(holding.dividends)} ·` : ''}
+        {holding.realized ? ` resultado de ventas ${fmtSignedEur(holding.realized)} ·` : ''}
+        {' '}importado de «{holding.fileName}»{holding.broker ? ` (${holding.broker})` : ''} el {fmtDate(holding.importedAt)}
       </p>
       <table>
         <thead>
-          <tr><th>Fecha fiscal</th><th className="num">Inversión</th><th className="num">Valor</th><th className="num">Resultado</th></tr>
+          <tr><th>Fecha fiscal</th>{shares && <th className="num">Títulos</th>}<th className="num">Inversión</th><th className="num">Valor</th><th className="num">Resultado</th></tr>
         </thead>
         <tbody>
           {holding.lots.map((l, i) => (
             <tr key={i}>
               <td>{fmtDate(l.date)}</td>
+              {shares && <td className="num">{fmtShares(l.shares ?? 0)}</td>}
               <td className="num">{fmtEur(l.invested)}</td>
               <td className="num">{fmtEur(l.value)}</td>
               <td className={`num ${l.result >= 0 ? 'pos' : 'neg'}`}>{fmtSignedEur(l.result)}</td>

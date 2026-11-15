@@ -12,11 +12,12 @@ const TAG_CLASS: Record<string, string> = {
 };
 
 export function AssetTag({ p }: { p: Product }) {
+  if (p.type === 'accion') return <span className="tag tag-rv" title="Acción (renta variable)">Acción</span>;
   if (!p.assetClass) return null;
   return <span className={`tag ${TAG_CLASS[p.assetClass] ?? 'tag-mix'}`} title={p.assetClass}>{SHORT[p.assetClass] ?? p.assetClass}</span>;
 }
 
-const maxByType = { fondo: maxCost('fondo'), etf: maxCost('etf'), plan: maxCost('plan'), alt: maxCost('alt') };
+const maxByType = { fondo: maxCost('fondo'), etf: maxCost('etf'), plan: maxCost('plan'), alt: maxCost('alt'), accion: 0 };
 
 /** Thin magnitude bar: cost relative to the most expensive product of the same type. */
 export function CostBar({ p }: { p: Product }) {

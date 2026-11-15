@@ -269,6 +269,8 @@ function SimEditor({ sim, onDeleted }: { sim: SimPortfolio; onDeleted: () => voi
             {MODES.find((m) => m.id === sim.returnMode)!.hint}
             {sim.returnMode !== 'personalizada' && funds.some(({ p }) => p.type === 'alt') &&
               ' Cripto 5 %, metales preciosos 4 % y materias primas 3 % al año (volatilidad 70 %, 16 % y 20 %), menos costes.'}
+            {sim.returnMode !== 'personalizada' && funds.some(({ p }) => p.type === 'accion') &&
+              ' Acciones individuales: 6 % al año como la renta variable, pero con volatilidad del 30 % (una sola empresa).'}
           </p>
         </div>
       </div>

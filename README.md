@@ -40,7 +40,7 @@ Todos los productos de la [hoja de cálculo mantenida por la comunidad](https://
 - **Búsqueda** por nombre, ISIN, índice o ticker, y **filtros** por tipo de activo, región/plazo y plataforma.
 - **Orden** por coste total o rentabilidad a 3 y 5 años.
 - **Productos nuevos** marcados durante 30 días desde que aparecen en la hoja.
-- **ISIN fuera del catálogo**: si buscas un ISIN que no está, el botón *«Buscar este ISIN fuera del catálogo»* crea una ficha **«No catalogado»** con su coste, categoría y domicilio. Puedes compararla y usarla en el simulador como cualquier otra.
+- **ISIN fuera del catálogo**: si buscas un ISIN que no está, el botón *«Buscar este ISIN fuera del catálogo»* crea una ficha **«No catalogado»** con su coste, categoría y domicilio. Puedes compararla y usarla en el simulador como cualquier otra. También funciona con **acciones** (p. ej. `US0378331005`, Apple), con su cotización en euros.
 
 Los filtros viven en la URL, así que cualquier búsqueda se puede compartir con un enlace.
 
@@ -52,7 +52,7 @@ Los filtros viven en la URL, así que cualquier búsqueda se puede compartir con
 <td width="50%"><img src="docs/screenshots/comparar.png" alt="Comparador de fondos"></td>
 </tr>
 <tr>
-<td><b>Ficha</b>: desglose de costes (TER + costes operativos), plataformas donde contratarlo, préstamo de valores y otros productos que replican el mismo índice, del más barato al más caro.</td>
+<td><b>Ficha</b>: evolución del valor liquidativo o la cotización a 1, 3 y 5 años (semanal, de FT.com), desglose de costes (TER + costes operativos), plataformas donde contratarlo, préstamo de valores y otros productos que replican el mismo índice, del más barato al más caro.</td>
 <td><b>Comparador</b>: hasta 3 productos lado a lado. Resalta el más barato y el de mejor rentabilidad, y muestra en qué plataformas está cada uno.</td>
 </tr>
 </table>
@@ -83,7 +83,7 @@ Crea carteras simuladas desde cero, con una plantilla o con *«+ Simulador»* de
 
 ![Mi cartera](docs/screenshots/mi-cartera.png)
 
-Importa los CSV de **plusvalías y minusvalías** que descargas de tu bróker (uno por fondo, con el ISIN en el nombre del archivo). Arrástralos a la página o usa *«+ Añadir CSV»*.
+Importa los CSV de **plusvalías y minusvalías** que descargas de tu bróker (uno por fondo, con el ISIN en el nombre del archivo) o la **exportación de transacciones de Trade Republic** (acciones, ETFs y fondos, con títulos, dividendos y ventas). Arrástralos a la página o usa *«+ Añadir CSV»*.
 
 - **Resumen**: valor de mercado, invertido, resultado y coste medio ponderado.
 - **Aportado frente a valor**: gráfico con tu historial y una proyección a 20 años.
@@ -144,12 +144,17 @@ Función serverless en `api/fund.ts`:
 |---|---|
 | `GET /api/fund?isin=XX…` | Nombre, categoría, tipo de activo, gastos corrientes y domicilio (FT.com; si no lo encuentra, OpenFIGI). Los ETF y ETC se buscan por su cotización en bolsa, preferiblemente en euros. |
 | `GET /api/fund?isin=XX…&since=AAAA-MM-DD` | Valor liquidativo actual y el del día indicado o anterior. |
+| `GET /api/fund?isin=XX…&history=5y` | Cierre semanal de los últimos años, para el gráfico de la ficha. |
+
+Las **acciones** se reconocen con OpenFIGI (tipo de valor) y su cotización se toma de FT.com, priorizando Xetra y las bolsas de la zona euro. La búsqueda de FT es de texto libre, así que un ETF solo se acepta si su ficha muestra el ISIN y una acción solo si el nombre coincide con el de OpenFIGI.
 
 La revaloración de Mi cartera es:
 
 ```
 valor hoy = valor del CSV × VL actual / VL del día anterior a la importación
 ```
+
+En la exportación de Trade Republic se conocen los títulos, así que `valor = títulos × cotización`; las ventas descuentan los lotes más antiguos (FIFO) y las criptomonedas compradas directamente se omiten. Del archivo solo se leen operaciones y dividendos: transferencias, pagos, nombres e IBAN se ignoran y no se guardan.
 
 Solo se aplica con precios en euros. Si un producto solo tiene precio en otra moneda, se mantiene el valor del CSV para no mezclar el efecto del tipo de cambio.
 

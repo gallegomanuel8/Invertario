@@ -48,7 +48,7 @@ export const isKnownId = (id: string) => catalogById.has(id) || state.some((p) =
 
 export function toProduct(info: FundInfo): Product {
   return {
-    id: externalId(info.isin), type: /\bETF\b|\bUCITS ETF\b/i.test(info.name) ? 'etf' : 'fondo',
+    id: externalId(info.isin), type: info.kind === 'stock' ? 'accion' : /\bETF\b|\bUCITS ETF\b/i.test(info.name) ? 'etf' : 'fondo',
     isin: info.isin, name: info.name, assetClass: info.assetClass, region: info.category,
     totalCost: info.ongoingCharge, ter: info.ongoingCharge, addedAt: null,
     external: { source: info.source, url: info.url, domicile: info.domicile, checkedAt: new Date().toISOString() },

@@ -8,6 +8,7 @@ export interface Lot {
   invested: number;
   value: number;
   result: number;
+  shares?: number; // broker transaction exports: units bought (value = shares × price)
 }
 
 export interface Holding {
@@ -24,6 +25,9 @@ export interface Holding {
   navCheckedAt?: string;
   lots: Lot[];
   notTransferTo?: string[]; // destination ISINs the user said are not a transfer from this fund
+  broker?: 'Trade Republic'; // imported from that broker's transaction export (lots carry shares)
+  dividends?: number; // net dividends received (€), from transaction exports
+  realized?: number; // realised result of sales (€), from transaction exports
 }
 
 /** One tracked portfolio ("cartera"): the user can follow several, each with its own CSVs. */
@@ -67,6 +71,100 @@ export function parseHoldingCsv(fileName: string, text: string, fileDate?: numbe
     ...(fileDate && Number.isFinite(fileDate) ? { fileDate: new Date(fileDate).toISOString() } : {}),
     lots,
   };
+}
+
+// ---- Trade Republic «Exportación de transacciones» (one CSV for the whole account) ----
+
+/** Splits one CSV line with double-quoted fields ("" escapes a quote). */
+function csvCells(line: string, sep: string): string[] {
+  const out: string[] = [];
+  let cur = '', quoted = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (quoted) {
+      if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+      else if (c === '"') quoted = false;
+      else cur += c;
+    } else if (c === '"') quoted = true;
+    else if (c === sep) { out.push(cur); cur = ''; }
+    else cur += c;
+  }
+  out.push(cur);
+  return out;
+}
+
+export const isTransactionExport = (text: string) => {
+  const head = text.replace(/^\uFEFF/, '').split(/\r?\n/, 1)[0].toLowerCase();
+  return head.includes('transaction_id') && head.includes('symbol') && head.includes('shares');
+};
+
+/**
+ * Builds one holding per ISIN from a Trade Republic transaction export. Only trades and dividends are
+ * read (symbol, date, shares, price, amount, fee, tax): transfers, card payments, names and IBANs in the
+ * file are ignored and never stored. Sales consume the oldest lots first (FIFO), like Spanish tax rules.
+ */
+export function parseTransactionCsv(fileName: string, text: string, fileDate?: number): { holdings: Holding[]; skipped: string[] } {
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter((l) => l.trim());
+  const sep = lines[0].includes(';') && !lines[0].includes(',') ? ';' : ',';
+  const header = csvCells(lines[0], sep).map((h) => h.trim().toLowerCase());
+  const col = (n: string) => header.indexOf(n);
+  const c = { date: col('date'), time: col('datetime'), category: col('category'), type: col('type'), name: col('name'), symbol: col('symbol'), shares: col('shares'), price: col('price'), amount: col('amount'), fee: col('fee'), tax: col('tax'), cls: col('asset_class') };
+  if ([c.date, c.symbol, c.shares, c.amount].some((i) => i < 0)) throw new Error(`«${fileName}» no tiene las columnas esperadas de una exportación de transacciones`);
+  const num = (v?: string) => (v && v.trim() ? Number(v.trim()) : 0);
+  const rows = lines.slice(1).map((l) => csvCells(l, sep)).sort((a, b) => (a[c.time] ?? a[c.date]).localeCompare(b[c.time] ?? b[c.date]));
+  const byIsin = new Map<string, { name: string; lots: Lot[]; dividends: number; realized: number }>();
+  const skipped = new Set<string>();
+  for (const r of rows) {
+    const symbol = (r[c.symbol] ?? '').trim().toUpperCase();
+    const type = (r[c.type] ?? '').toUpperCase();
+    const trade = (r[c.category] ?? '').toUpperCase() === 'TRADING';
+    if (!symbol || (!trade && type !== 'DIVIDEND')) continue;
+    // Crypto bought directly has a pseudo-ISIN (XF000BTC0017) with no market data: report it, don't track it.
+    if (!ISIN_RE.test(symbol) || (r[c.cls] ?? '').toUpperCase() === 'CRYPTO') { skipped.add(r[c.name] || symbol); continue; }
+    const date = (r[c.date] ?? '').slice(0, 10);
+    const h = byIsin.get(symbol) ?? { name: r[c.name] ?? '', lots: [], dividends: 0, realized: 0 };
+    byIsin.set(symbol, h);
+    const amount = num(r[c.amount]), fee = num(r[c.fee]), tax = num(r[c.tax]);
+    if (!trade) { h.dividends += amount + tax; continue; } // tax comes negative
+    const shares = Math.abs(num(r[c.shares]));
+    if (!shares || !amount) continue;
+    if (amount < 0) {
+      // buy: cost includes the fee (it counts for the tax cost basis)
+      const invested = -amount - fee;
+      h.lots.push({ date, invested, value: -amount, result: -amount - invested, shares });
+    } else {
+      let left = shares, cost = 0;
+      while (left > 1e-9 && h.lots.length) {
+        const lot = h.lots[0];
+        const take = Math.min(left, lot.shares!);
+        const part = take / lot.shares!;
+        cost += lot.invested * part;
+        lot.invested -= lot.invested * part; lot.value -= lot.value * part; lot.result = lot.value - lot.invested;
+        lot.shares! -= take; left -= take;
+        if (lot.shares! <= 1e-9) h.lots.shift();
+      }
+      h.realized += amount + fee + tax - cost;
+    }
+  }
+  const importedAt = new Date().toISOString();
+  const holdings: Holding[] = [];
+  for (const [isin, h] of byIsin) {
+    if (!h.lots.length) continue; // fully sold
+    holdings.push({
+      isin, fileName, importedAt, name: h.name || undefined, broker: 'Trade Republic', lots: h.lots,
+      ...(fileDate && Number.isFinite(fileDate) ? { fileDate: new Date(fileDate).toISOString() } : {}),
+      ...(h.dividends ? { dividends: Math.round(h.dividends * 100) / 100 } : {}),
+      ...(h.realized ? { realized: Math.round(h.realized * 100) / 100 } : {}),
+    });
+  }
+  if (!holdings.length && !skipped.size) throw new Error(`«${fileName}» no contiene compras de valores con ISIN`);
+  return { holdings, skipped: [...skipped] };
+}
+
+/** Any supported CSV: a «Plusvalías y minusvalías» export (one fund) or a broker transaction export. */
+export function parseCsvFile(fileName: string, text: string, fileDate?: number): { holdings: Holding[]; skipped: string[] } {
+  if (isTransactionExport(text)) return parseTransactionCsv(fileName, text, fileDate);
+  return { holdings: [parseHoldingCsv(fileName, text, fileDate)], skipped: [] };
 }
 
 export const newFolioId = () => Math.random().toString(36).slice(2, 10);
@@ -133,7 +231,7 @@ export function mergeImport(cur: Holding[], parsed: Holding[]): { holdings: Hold
       continue;
     }
     // keep the user's name, identified fund data and transfer decisions; prices restart from the new CSV
-    incoming.push({ ...p, name: prev?.name, info: prev?.info, infoCheckedAt: prev?.infoCheckedAt, infoVersion: prev?.infoVersion, notTransferTo: prev?.notTransferTo });
+    incoming.push({ ...p, name: p.name ?? prev?.name, info: prev?.info, infoCheckedAt: prev?.infoCheckedAt, infoVersion: prev?.infoVersion, notTransferTo: prev?.notTransferTo });
   }
   return { holdings: [...cur.filter((h) => !incoming.some((p) => p.isin === h.isin)), ...incoming], duplicates, stale };
 }
@@ -155,7 +253,7 @@ const sameLot = (a: Lot, b: Lot) => a.date === b.date && Math.abs(a.invested - b
 export function detectTransfers(holdings: Holding[]): Transfer[] {
   const out: Transfer[] = [];
   for (const from of holdings) {
-    if (!from.lots.length) continue;
+    if (!from.lots.length || from.broker) continue; // listed shares/ETFs can't be transferred tax-free
     for (const to of holdings) {
       if (to === from || to.lots.length < from.lots.length || csvDate(to) <= csvDate(from)) continue;
       if (from.notTransferTo?.includes(to.isin)) continue;
@@ -192,7 +290,7 @@ export async function lookupFundInfo(isin: string): Promise<FundInfo | null> {
 }
 
 const RETRY_MS = 7 * 86_400_000;
-export const LOOKUP_VERSION = 3; // 3: ETFs/ETCs are found on FT.com too (before, only OpenFIGI's name)
+export const LOOKUP_VERSION = 4; // 3: ETFs/ETCs on FT.com; 4: shares (acciones) too
 /** Funds missing from the catalog that were never looked up, whose lookup failed over a week ago,
  *  or that only got a name from OpenFIGI before a lookup improvement. */
 export const needsLookup = (h: Holding, inCatalog: boolean) =>
@@ -203,7 +301,7 @@ export const needsLookup = (h: Holding, inCatalog: boolean) =>
 /** Catalog-shaped product built from looked-up data, so costs and asset type work like catalog funds. */
 export function externalProduct(info: FundInfo): Product {
   return {
-    id: `ext-${info.isin}`, type: 'fondo', isin: info.isin, name: info.name,
+    id: `ext-${info.isin}`, type: info.kind === 'stock' ? 'accion' : 'fondo', isin: info.isin, name: info.name,
     assetClass: info.assetClass, region: info.category, totalCost: info.ongoingCharge, ter: info.ongoingCharge, addedAt: null,
   };
 }
@@ -235,6 +333,11 @@ export async function fetchNavs(h: Holding): Promise<{ nav: Nav; baseNav: Nav | 
 /** Ratio applied to every lot's CSV market value (units don't change, only the price). 1 when unknown. */
 // Only EUR prices: CSV values are in euros, so a USD/GBP price ratio would ignore the exchange-rate move.
 export function navFactor(h: Holding): number {
+  if (h.broker) {
+    // transaction exports know the shares: value = shares × current price (euro prices only)
+    const value = sum(h.lots.map((l) => l.value));
+    return h.nav?.currency === 'EUR' && value > 0 ? sum(h.lots.map((l) => (l.shares ?? 0) * h.nav!.price)) / value : 1;
+  }
   if (!h.nav || !h.baseNav || h.nav.currency !== 'EUR' || h.baseNav.currency !== 'EUR' || h.baseNav.price <= 0) return 1;
   return h.nav.date > h.baseNav.date ? h.nav.price / h.baseNav.price : 1;
 }
@@ -242,5 +345,6 @@ export function navFactor(h: Holding): number {
 export function withLiveValues(h: Holding): Holding {
   const f = navFactor(h);
   if (f === 1) return h;
-  return { ...h, lots: h.lots.map((l) => ({ ...l, value: l.value * f, result: l.value * f - l.invested })) };
+  const valueOf = (l: Lot) => (h.broker && l.shares != null ? l.shares * h.nav!.price : l.value * f);
+  return { ...h, lots: h.lots.map((l) => ({ ...l, value: valueOf(l), result: valueOf(l) - l.invested })) };
 }

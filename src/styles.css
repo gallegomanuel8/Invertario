@@ -547,3 +547,7 @@ td.num .costbar { margin-left: auto; width: 64px; }
 .sim-tabs .folio-tab .folio-del { padding: 4px 10px 4px 4px; font-size: 0.8rem; line-height: 1; color: var(--text-2); opacity: 0.75; }
 .sim-tabs .folio-tab .folio-del:hover, .sim-tabs .folio-tab .folio-del:focus-visible { opacity: 1; color: var(--neg); }
 .sim-tabs .folio-tab.active .folio-del:hover { color: var(--on-accent); }
+.price-history-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.price-history-head h3 { margin: 0; }
+.price-history .chart { margin-top: 4px; }
+.price-area { fill: var(--series-1-area); }

@@ -88,6 +88,7 @@ const SORT_LABELS: Record<ProductType, [SortKey, string][]> = {
   etf: [['totalCost', 'TER'], ['name', 'Nombre'], ['addedAt', 'Recién añadidos']],
   plan: [['totalCost', 'Coste total'], ['name', 'Nombre'], ['addedAt', 'Recién añadidos']],
   alt: [['totalCost', 'Coste'], ['name', 'Nombre'], ['addedAt', 'Recién añadidos']],
+  accion: [['name', 'Nombre']],
 };
 
 export function Catalog() {
@@ -321,7 +322,7 @@ export function Catalog() {
   );
 }
 
-const TYPE_NAMES: Record<ProductType, string> = { fondo: 'Fondos indexados', etf: 'ETFs', plan: 'Planes de pensiones', alt: 'Cripto y materias primas' };
+const TYPE_NAMES: Record<ProductType, string> = { fondo: 'Fondos indexados', etf: 'ETFs', plan: 'Planes de pensiones', alt: 'Cripto y materias primas', accion: 'Acciones' };
 
 /** The search is an ISIN with no results here: point to it in another tab, or look it up outside the catalog. */
 function IsinLookup({ isin, onOpen }: { isin: string; onOpen: (p: Product) => void }) {

@@ -3,7 +3,7 @@ import { fmtPct, fmtRawPct } from '../format';
 import type { Product } from '../types';
 import { AssetTag } from './bits';
 
-const TYPE_LABEL: Record<Product['type'], string> = { fondo: 'Fondo indexado', etf: 'ETF', plan: 'Plan de pensiones', alt: 'ETC / ETN' };
+const TYPE_LABEL: Record<Product['type'], string> = { fondo: 'Fondo indexado', etf: 'ETF', plan: 'Plan de pensiones', alt: 'ETC / ETN', accion: 'Acción' };
 
 interface RowDef {
   label: string;

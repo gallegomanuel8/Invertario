@@ -5,6 +5,8 @@ import type { ReturnMode, SimPortfolio } from './sims';
 /** Long-term, deliberately prudent gross annual returns and volatilities by asset class (%). */
 const PRUDENT = { equity: 6, bonds: 2.5 };
 const VOL = { equity: 15, bonds: 5 };
+/** A single company is far more volatile than a diversified equity index. */
+const STOCK_VOL = 30;
 /** Crypto, metals and commodities produce no income: low prudent returns, very high volatility. */
 const ALT: Record<string, { ret: number; vol: number }> = {
   Criptomonedas: { ret: 5, vol: 70 },
@@ -48,7 +50,7 @@ export function fundAssumption(p: Product, weight: number, mode: ReturnMode, cus
     netReturn = custom - cost;
     source = 'Personalizada (bruta, menos costes)';
   }
-  const volatility = alt ? alt.vol : eq * VOL.equity + (1 - eq) * VOL.bonds;
+  const volatility = alt ? alt.vol : p.type === 'accion' ? STOCK_VOL : eq * VOL.equity + (1 - eq) * VOL.bonds;
   return { product: p, weight, cost, netReturn, volatility, source };
 }
 
