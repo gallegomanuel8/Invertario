@@ -133,7 +133,18 @@ export function Portfolio() {
   const all = totals(rows.flatMap((r) => r.live.lots));
   const latestNav = rows.map((r) => r.h.nav?.date).filter(Boolean).sort().at(-1);
   const updated = rows.filter((r) => navFactor(r.h) !== 1).length;
-  const noPrice = rows.filter((r) => r.h.navCheckedAt && !r.h.nav).map((r) => r.h.isin);
+  // Positions still at their CSV value, and why (shown by name so the user knows which one).
+  const notUpdated = rows.filter((r) => r.h.navCheckedAt && navFactor(r.h) === 1).map((r) => ({
+    name: r.name,
+    why: !r.h.nav ? 'sin precio' : r.h.nav.currency !== 'EUR' ? `precio solo en ${r.h.nav.currency}`
+      : r.h.broker ? 'sin precio' : !r.h.baseNav ? 'sin precio del día del CSV' : 'el CSV ya es del último precio',
+  }));
+  // Brokers' headline "invested" counts the amount moved in a transfer as new money (the gain until then
+  // stops counting as return); fiscal cost keeps the original lots. Approximated with the origin's CSV value.
+  const transferGain = sum(transfers.filter((t) => active.includes(t.to)).map((t) => {
+    const o = totals(t.from.lots);
+    return o.value - o.invested;
+  }));
   const known = rows.filter((r) => r.product?.totalCost != null);
   const weightedCost = known.length ? sum(known.map((r) => r.value * r.product!.totalCost!)) / sum(known.map((r) => r.value)) : null;
 
@@ -329,9 +340,11 @@ export function Portfolio() {
         <div className="price-status" role="status">
           <span>
             {refreshing ? 'Actualizando valores con el último valor liquidativo…'
-              : latestNav ? <>Valores actualizados con el valor liquidativo del <strong>{fmtDate(latestNav)}</strong>{updated < rows.length && ` (${updated} de ${rows.length} fondos)`}.</>
+              : latestNav ? <>Valores actualizados con el valor liquidativo del <strong>{fmtDate(latestNav)}</strong>{updated < rows.length && ` (${updated} de ${rows.length} posiciones)`}.</>
               : 'Valores del CSV importado.'}
-            {!refreshing && noPrice.length > 0 && <span className="muted"> {noPrice.length === 1 ? '1 fondo sin precio' : `${noPrice.length} fondos sin precio`}: se usa el valor del CSV.</span>}
+            {!refreshing && notUpdated.length > 0 && (
+              <span className="muted"> Sin actualizar, con el valor del CSV: {notUpdated.map((n) => `${n.name} (${n.why})`).join('; ')}.</span>
+            )}
           </span>
           <button className="btn" onClick={() => refreshPrices(true)} disabled={refreshing}>
             {refreshing ? 'Actualizando…' : 'Actualizar valores'}
@@ -350,7 +363,8 @@ export function Portfolio() {
         <>
           <div className="kpis">
             <Kpi label="Valor de mercado" value={fmtEur(all.value)} />
-            <Kpi label="Invertido" value={fmtEur(all.invested)} />
+            <Kpi label="Invertido" value={fmtEur(all.invested)}
+              sub={transferGain ? `Coste fiscal. ≈ ${fmtEur(all.invested + transferGain)} contando lo traspasado como nueva inversión, como en la cabecera de tu bróker` : undefined} />
             <Kpi
               label="Resultado"
               value={fmtSignedEur(all.result)}

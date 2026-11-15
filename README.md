@@ -161,7 +161,9 @@ valor hoy = valor del CSV × VL actual / VL del día anterior a la importación
 
 En la exportación de Trade Republic se conocen los títulos, así que `valor = títulos × cotización`; las ventas descuentan los lotes más antiguos (FIFO) y las criptomonedas compradas directamente se omiten. Del archivo solo se leen operaciones y dividendos: transferencias, pagos, nombres e IBAN se ignoran y no se guardan.
 
-Solo se aplica con precios en euros. Si un producto solo tiene precio en otra moneda, se mantiene el valor del CSV para no mezclar el efecto del tipo de cambio.
+Los precios en otra moneda (p. ej. una clase en USD) se pasan a euros con el tipo de referencia del BCE de cada día ([Frankfurter](https://frankfurter.dev); solo se envían la divisa y la fecha), porque el bróker valora en euros y el valor se mueve con el precio y con el cambio. Si no hay tipo de cambio, se mantiene el valor del CSV. La línea de precios indica por su nombre qué posiciones siguen sin actualizar y por qué.
+
+Con traspasos, «Invertido» es el **coste fiscal** (los lotes conservan su coste original). Debajo se muestra también el invertido aproximado **contando lo traspasado como nueva inversión**, que es lo que enseña la cabecera de brókers como MyInvestor.
 
 ### Traspasos
 

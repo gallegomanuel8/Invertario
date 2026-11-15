@@ -173,7 +173,31 @@ export async function lookupFund(isin: string): Promise<FundInfo | null> {
 // ---- Prices (valor liquidativo) ----
 
 export interface NavPoint { price: number; date: string } // date: YYYY-MM-DD
-export interface PriceInfo { isin: string; currency: string; current: NavPoint; base: NavPoint | null }
+export interface PriceInfo { isin: string; currency: string; current: NavPoint; base: NavPoint | null; originalCurrency?: string }
+
+/** ECB reference rate (units of EUR per 1 `ccy`) on or before `date`, from Frankfurter. Sends only the currency and date. */
+async function eurRate(ccy: string, date: string): Promise<number | null> {
+  const res = await fetch(`https://api.frankfurter.dev/v1/${date}?from=${ccy}&to=EUR`, { headers: { 'User-Agent': UA } });
+  if (!res.ok) return null;
+  const rate = ((await res.json()) as { rates?: { EUR?: number } }).rates?.EUR;
+  return typeof rate === 'number' && rate > 0 ? rate : null;
+}
+
+/**
+ * Share classes priced in USD/GBP/… are converted to euros with each day's rate: brokers value them in
+ * euros, so the euro value moves with both the price and the exchange rate.
+ */
+async function inEuros(p: PriceInfo): Promise<PriceInfo> {
+  if (p.currency === 'EUR' || !/^[A-Z]{3}$/.test(p.currency)) return p;
+  const conv = async (n: NavPoint | null) => {
+    if (!n) return null;
+    const r = await eurRate(p.currency, n.date).catch(() => null);
+    return r ? { date: n.date, price: Math.round(n.price * r * 10_000) / 10_000 } : undefined;
+  };
+  const [current, base] = await Promise.all([conv(p.current), conv(p.base)]);
+  if (!current || base === undefined) return p; // no rate: keep the original currency (the app won't rescale)
+  return { ...p, currency: 'EUR', originalCurrency: p.currency, current, base };
+}
 
 const MONTHS: Record<string, string> = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06', Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' };
 const ftDate = (s: string) => {
@@ -209,7 +233,7 @@ export async function lookupPrices(isin: string, since: string | null): Promise<
     if (!Number.isFinite(price) || !date) continue;
     const xid = /&quot;xid&quot;:&quot;(\d+)&quot;/.exec(html)?.[1];
     const base = since && xid ? await navOnOrBefore(xid, since).catch(() => null) : null;
-    return { isin, currency: ccy, current: { price, date }, base };
+    return inEuros({ isin, currency: ccy, current: { price, date }, base });
   }
   return null;
 }
