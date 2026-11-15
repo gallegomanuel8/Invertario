@@ -5,5 +5,5 @@ dist/
 *.log
 
 # Datos personales (CSV de plusvalías/minusvalías)
-csv de ejemplo/
+csv de ejemplo*/
 *.tsbuildinfo

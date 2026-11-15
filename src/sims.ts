@@ -117,12 +117,12 @@ const num = (v: unknown, min: number, max: number, fallback: number) =>
   typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback;
 
 /** Parses and sanitises a shared payload; returns null if it is not a valid Invertario portfolio. */
-export function decodeSim(code: string, knownIds: Set<string>): (Shared & { dropped: number }) | null {
+export function decodeSim(code: string, isKnown: (id: string) => boolean): (Shared & { dropped: number }) | null {
   try {
     const p = JSON.parse(fromB64Url(code));
     if (p?.v !== 1 || !Array.isArray(p.f)) return null;
     const rows = (p.f as unknown[]).slice(0, 30).filter((r): r is [string, number, number?] => Array.isArray(r) && typeof r[0] === 'string');
-    const funds = rows.filter(([id]) => knownIds.has(id)).map(([id, w, c]) => ({
+    const funds = rows.filter(([id]) => isKnown(id)).map(([id, w, c]) => ({
       id, weight: num(w, 0, 100, 0), ...(typeof c === 'number' && Number.isFinite(c) ? { customReturn: num(c, -50, 50, 0) } : {}),
     }));
     const modes: ReturnMode[] = ['prudente', 'historica', 'personalizada'];

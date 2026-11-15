@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { catalog } from '../data';
+import { ISIN_RE, isKnownId, lookupExternal, productById, useExternal } from '../external';
 import { fmtEur, fmtEur0, fmtPct, fmtSignedPct } from '../format';
 import { addFundToSim, createSim, decodeSim, deleteSim, equalWeights, importSim, type ReturnMode, shareUrl, type SimPortfolio, updateSim, useSims } from '../sims';
 import { assetTypeSlices, fundAssumption, project, toCsv } from '../simulate';
 import type { Product } from '../types';
-import { AssetTag } from './bits';
+import { AssetTag, useDismissDetails } from './bits';
 import { Donut, ProjectionChart } from './Charts';
 
-const byId = new Map(catalog.items.map((p) => [p.id, p]));
 
 const TEMPLATES: { name: string; funds: [string, number][] }[] = [
   { name: 'Mundo desarrollado + emergentes (90/10)', funds: [['IE000ZYRH0Q7', 90], ['IE000QAZP7L2', 10]] },
@@ -24,7 +24,7 @@ const MODES: { id: ReturnMode; label: string; hint: string }[] = [
 const readSelected = () => location.hash.match(/^#\/simulador\/([\w-]+)/)?.[1] ?? null;
 const readShared = () => {
   const code = location.hash.match(/^#\/simulador\/compartida\?c=([\w-]+)/)?.[1];
-  return code ? decodeSim(code, new Set(byId.keys())) : null;
+  return code ? decodeSim(code, isKnownId) : null;
 };
 const hadShareLink = () => location.hash.startsWith('#/simulador/compartida');
 
@@ -34,6 +34,8 @@ export function Simulator() {
   const [incoming, setIncoming] = useState(readShared);
   const [badLink] = useState(() => hadShareLink() && !readShared());
   const sim = sims.find((s) => s.id === selectedId) ?? sims[0] ?? null;
+  const privacyRef = useRef<HTMLDetailsElement>(null);
+  useDismissDetails(privacyRef);
 
   const select = (id: string) => {
     setSelectedId(id);
@@ -43,9 +45,15 @@ export function Simulator() {
     const n = name ?? prompt('Nombre de la cartera simulada:', `Cartera ${sims.length + 1}`);
     if (n == null) return;
     const s = createSim(n);
-    const valid = (funds ?? []).filter(([id]) => byId.has(id));
+    const valid = (funds ?? []).filter(([id]) => productById(id));
     if (valid.length) updateSim(s.id, { funds: valid.map(([id, weight]) => ({ id, weight })) });
     select(s.id);
+  };
+
+  const removeSim = (s: SimPortfolio) => {
+    if (!confirm(`¿Borrar la cartera simulada «${s.name}»?`)) return;
+    deleteSim(s.id);
+    if (s.id === sim?.id) setSelectedId(null);
   };
 
   const acceptShared = () => {
@@ -66,26 +74,44 @@ export function Simulator() {
       {badLink && !incoming && (
         <p className="errors" role="alert">El enlace de cartera compartida no es válido o está incompleto.</p>
       )}
-      <div className="hero hero-compact">
-        <div className="hero-text">
-          <p className="eyebrow">Planifica</p>
+      {sims.length > 0 ? (
+        // Once there is a simulated portfolio, the intro gives way to a slim header.
+        <div className="page-head">
           <h1>Simulador de carteras</h1>
-          <p className="muted">
-            Crea carteras con fondos del catálogo y calcula cuánto podrían valer con aportaciones periódicas, interés compuesto,
-            los costes reales de cada fondo y la inflación.
+          <div className="page-head-actions">
+            <button className="btn btn-sm" onClick={() => create()} title="Crea otra cartera simulada para compararla">+ Cartera</button>
+            <details className="privacy-pop" ref={privacyRef}>
+              <summary className="btn btn-sm"><span aria-hidden>🔒</span> Privacidad</summary>
+              <div className="privacy-pop-body">
+                <span aria-hidden>🔒</span> Tus carteras simuladas se guardan <strong>solo en este navegador</strong>.
+              </div>
+            </details>
+          </div>
+        </div>
+      ) : (
+        <div className="hero hero-compact">
+          <div className="hero-text">
+            <p className="eyebrow">Planifica</p>
+            <h1>Simulador de carteras</h1>
+            <p className="muted">
+              Crea carteras con fondos del catálogo y calcula cuánto podrían valer con aportaciones periódicas, interés compuesto,
+              los costes reales de cada fondo y la inflación.
+            </p>
+          </div>
+          <p className="privacy">
+            <span aria-hidden>🔒</span> Tus carteras simuladas se guardan <strong>solo en este navegador</strong>.
           </p>
         </div>
-        <p className="privacy">
-          <span aria-hidden>🔒</span> Tus carteras simuladas se guardan <strong>solo en este navegador</strong>.
-        </p>
-      </div>
+      )}
 
       {sims.length > 0 && (
         <div className="sim-tabs" role="tablist" aria-label="Carteras simuladas">
           {sims.map((s) => (
-            <button key={s.id} role="tab" aria-selected={s.id === sim?.id} onClick={() => select(s.id)}>{s.name}</button>
+            <span key={s.id} className={`folio-tab${s.id === sim?.id ? ' active' : ''}`}>
+              <button role="tab" aria-selected={s.id === sim?.id} onClick={() => select(s.id)}>{s.name}</button>
+              <button className="folio-del" onClick={() => removeSim(s)} aria-label={`Borrar la cartera simulada ${s.name}`} title="Borrar esta cartera simulada">✕</button>
+            </span>
           ))}
-          <button className="sim-new" onClick={() => create()}>+ Nueva cartera</button>
         </div>
       )}
 
@@ -97,7 +123,7 @@ export function Simulator() {
             {TEMPLATES.map((t) => (
               <button key={t.name} className="pick" onClick={() => create(t.name, t.funds)}>
                 <span className="pick-name">{t.name}</span>
-                <span className="muted small">{t.funds.map(([id, w]) => `${w} % ${byId.get(id)?.index ?? id}`).join(' · ')}</span>
+                <span className="muted small">{t.funds.map(([id, w]) => `${w} % ${productById(id)?.index ?? id}`).join(' · ')}</span>
               </button>
             ))}
           </div>
@@ -113,8 +139,10 @@ function SimEditor({ sim, onDeleted }: { sim: SimPortfolio; onDeleted: () => voi
   const set = (patch: Partial<SimPortfolio>) => updateSim(sim.id, patch);
   const [showTable, setShowTable] = useState(false);
 
+  useExternal();
+  useMissingExternal(sim.funds.map((f) => f.id));
   const funds = sim.funds
-    .map((f) => ({ f, p: byId.get(f.id) }))
+    .map((f) => ({ f, p: productById(f.id) }))
     .filter((x): x is { f: typeof x.f; p: Product } => x.p != null);
   const assumptions = funds.map(({ f, p }) => fundAssumption(p, f.weight, sim.returnMode, f.customReturn));
   // assumptions derive entirely from `sim`, so it is the only dependency
@@ -237,7 +265,11 @@ function SimEditor({ sim, onDeleted }: { sim: SimPortfolio; onDeleted: () => voi
                 onClick={() => set({ returnMode: m.id })}>{m.label}</button>
             ))}
           </div>
-          <p className="muted small">{MODES.find((m) => m.id === sim.returnMode)!.hint}</p>
+          <p className="muted small">
+            {MODES.find((m) => m.id === sim.returnMode)!.hint}
+            {sim.returnMode !== 'personalizada' && funds.some(({ p }) => p.type === 'alt') &&
+              ' Cripto 5 %, metales preciosos 4 % y materias primas 3 % al año (volatilidad 70 %, 16 % y 20 %), menos costes.'}
+          </p>
         </div>
       </div>
 
@@ -274,7 +306,9 @@ function SimEditor({ sim, onDeleted }: { sim: SimPortfolio; onDeleted: () => voi
               <div className="composition">
                 <Donut title="Por fondo" slices={byFund} center={{ label: 'Fondos', value: String(funds.length) }} />
                 <Donut title="Por tipo de activo" slices={byType}
-                  center={{ label: 'RV / RF', value: `${Math.round(equityPct)} / ${100 - Math.round(equityPct)}` }} />
+                  center={byType.length > 2 || (byType.length === 2 && !byType.some((t) => t.label === 'Renta fija'))
+                    ? { label: 'Renta variable', value: `${Math.round(equityPct)} %` }
+                    : { label: 'RV / RF', value: `${Math.round(equityPct)} / ${100 - Math.round(equityPct)}` }} />
               </div>
             </div>
 
@@ -327,25 +361,59 @@ function SimEditor({ sim, onDeleted }: { sim: SimPortfolio; onDeleted: () => voi
   );
 }
 
+/** Shared links can carry funds looked up outside the catalog: fetch the ones this browser doesn't know yet. */
+function useMissingExternal(ids: string[]) {
+  const key = ids.filter((id) => id.startsWith('ext-') && !productById(id)).join();
+  useEffect(() => {
+    for (const id of key ? key.split(',') : []) lookupExternal(id.slice(4)).catch(() => {});
+  }, [key]);
+}
+
 function FundSearch({ exclude, onAdd }: { exclude: string[]; onAdd: (id: string) => void }) {
   const [q, setQ] = useState('');
+  const [lookup, setLookup] = useState<'idle' | 'loading' | 'notfound' | 'error'>('idle');
+  const external = useExternal();
+  const isin = q.trim().toUpperCase();
   const results = useMemo(() => {
     const t = q.trim().toLowerCase();
     if (t.length < 2) return [];
-    return catalog.items
+    return [...catalog.items, ...external]
       .filter((p) => !exclude.includes(p.id) && [p.name, p.isin, p.index, p.ticker].some((v) => v?.toLowerCase().includes(t)))
       .sort((a, b) => (a.totalCost ?? 9) - (b.totalCost ?? 9))
       .slice(0, 8);
-  }, [q, exclude]);
+  }, [q, exclude, external]);
+  const searchOutside = async () => {
+    setLookup('loading');
+    try {
+      const p = await lookupExternal(isin);
+      if (!p) return setLookup('notfound');
+      setLookup('idle');
+      if (!exclude.includes(p.id)) onAdd(p.id);
+      setQ('');
+    } catch {
+      setLookup('error');
+    }
+  };
+  const canSearchOutside = ISIN_RE.test(isin) && !results.length && !catalog.items.some((p) => p.isin === isin);
   return (
     <div className="fund-search">
-      <input type="search" placeholder="Añadir fondo: nombre, ISIN o índice…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar fondo para añadir" />
+      <input type="search" placeholder="Añadir fondo: nombre, ISIN o índice…" value={q} onChange={(e) => { setQ(e.target.value); setLookup('idle'); }} aria-label="Buscar fondo para añadir" />
+      {canSearchOutside && (
+        <div className="fund-search-outside">
+          <button className="btn" onClick={searchOutside} disabled={lookup === 'loading'} aria-busy={lookup === 'loading'}>
+            {lookup === 'loading' ? 'Buscando…' : `Buscar ${isin} fuera del catálogo`}
+          </button>
+          {lookup === 'notfound' && <p className="small neg" role="status">No lo encontramos en FT.com ni en OpenFIGI.</p>}
+          {lookup === 'error' && <p className="small neg" role="alert">No se pudo consultar ahora. Inténtalo de nuevo.</p>}
+          <p className="muted small">Se consulta solo el ISIN (vía FT.com).</p>
+        </div>
+      )}
       {results.length > 0 && (
         <ul className="similar">
           {results.map((p) => (
             <li key={p.id}>
               <button className="similar-item" onClick={() => { onAdd(p.id); setQ(''); }}>
-                <span><AssetTag p={p} /> {p.name} <span className="muted small">{p.type === 'etf' ? 'ETF' : p.type === 'plan' ? 'Plan' : ''}</span></span>
+                <span><AssetTag p={p} /> {p.name} <span className="muted small">{p.external ? 'No catalogado' : p.type === 'etf' ? 'ETF' : p.type === 'plan' ? 'Plan' : p.type === 'alt' ? p.structure : ''}</span></span>
                 <span className="num">{fmtPct(p.totalCost)}</span>
               </button>
             </li>
@@ -384,16 +452,18 @@ function SharedPreview({ data, onAccept, onDismiss }: {
   onAccept: () => void;
   onDismiss: () => void;
 }) {
+  useExternal();
+  useMissingExternal(data.funds.map((f) => f.id));
   return (
     <div className="panel shared-preview" role="region" aria-label="Cartera compartida">
       <p className="eyebrow">Te han compartido una cartera</p>
       <h2>{data.name}</h2>
       <ul className="shared-funds">
         {data.funds.map((f) => {
-          const p = byId.get(f.id)!;
+          const p = productById(f.id);
           return (
             <li key={f.id}>
-              <span><AssetTag p={p} /> {p.name}</span>
+              <span>{p ? <><AssetTag p={p} /> {p.name}</> : <span className="mono">{f.id.slice(4)}</span>}{f.id.startsWith('ext-') && <span className="muted small"> · no catalogado</span>}</span>
               <span className="num">{fmtPct(f.weight, 0)}</span>
             </li>
           );

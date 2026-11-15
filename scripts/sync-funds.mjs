@@ -7,7 +7,11 @@ import path from 'node:path';
 
 const SHEET_ID = '1qTBkH0K5zE-e5OXsUo6Prmo2QGmYNWf63Y-iLQqdBaA';
 const TABS = { funds: '0', etfs: '1366659631', pensions: '2086398400' };
-const OUT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'data', 'funds.json');
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const OUT = path.join(HERE, '..', 'src', 'data', 'funds.json');
+// Crypto ETNs, metal ETCs, commodity ETPs and a few ETFs the sheet lacks (money market, real estate)
+// are not in the community sheet: Invertario curates them here.
+const ALTERNATIVES = path.join(HERE, 'alternatives.json');
 
 const ASSET_CLASSES = ['Renta Variable', 'Renta Fija', 'Multiactivo'];
 const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}\d$/;
@@ -120,10 +124,30 @@ function parsePensions(rows) {
   return items;
 }
 
+async function loadAlternatives() {
+  const { items } = JSON.parse(await readFile(ALTERNATIVES, 'utf8'));
+  return items.map((a) => {
+    if (!ISIN_RE.test(a.isin)) throw new Error(`alternatives.json: bad ISIN ${a.isin}`);
+    const type = a.type ?? 'alt';
+    if (type !== 'alt' && type !== 'etf') throw new Error(`alternatives.json: bad type ${type}`);
+    return {
+      id: a.isin, type, isin: a.isin, name: a.name, assetClass: a.assetClass, region: a.region,
+      ter: a.ter, totalCost: a.totalCost ?? a.ter, index: a.index ?? null,
+      ...(type === 'etf' ? { distribution: a.distribution ?? null } : {}),
+      structure: a.structure, backing: a.backing, currency: a.currency ?? null,
+      ticker: a.ticker ?? null, exchange: a.exchange ?? null, note: a.note ?? null, curated: true,
+    };
+  });
+}
+
 async function main() {
   const [fundRows, etfRows, ppRows] = await Promise.all([fetchTab(TABS.funds), fetchTab(TABS.etfs), fetchTab(TABS.pensions)]);
   const funds = parseFunds(fundRows);
-  const items = [...funds.items, ...parseEtfs(etfRows), ...parsePensions(ppRows)];
+  const sheetItems = [...funds.items, ...parseEtfs(etfRows), ...parsePensions(ppRows)];
+  if (sheetItems.length < 50) throw new Error(`Only ${sheetItems.length} products parsed, sheet layout probably changed`);
+  // The community sheet wins if it ever lists one of our curated ISINs.
+  const sheetIds = new Set(sheetItems.map((p) => p.id));
+  const items = [...sheetItems, ...(await loadAlternatives()).filter((p) => !sheetIds.has(p.id))];
   if (items.length < 50) throw new Error(`Only ${items.length} products parsed, sheet layout probably changed`);
 
   let previous = null;

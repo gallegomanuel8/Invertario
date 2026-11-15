@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { catalog, cheapestByCategory, isNew, NEW_DAYS } from '../data';
+import { ISIN_RE, lookupExternal, productById, useExternal } from '../external';
 import { fmtDate, fmtPct } from '../format';
 import type { Product, ProductType } from '../types';
 import { AddToSim } from './AddToSim';
@@ -14,6 +15,7 @@ const TYPES: { id: ProductType; label: string }[] = [
   { id: 'fondo', label: 'Fondos indexados' },
   { id: 'etf', label: 'ETFs' },
   { id: 'plan', label: 'Planes de pensiones' },
+  { id: 'alt', label: 'Cripto y materias primas' },
 ];
 
 type SortKey = 'name' | 'totalCost' | 'return3y' | 'return5y' | 'addedAt';
@@ -38,7 +40,6 @@ const DEFAULTS: Filters = {
   sort: { key: 'totalCost', dir: 1 },
   detail: '', compare: [], compareOpen: false,
 };
-const byId = new Map(catalog.items.map((p) => [p.id, p]));
 const SORT_KEYS: SortKey[] = ['name', 'totalCost', 'return3y', 'return5y', 'addedAt'];
 
 // Filters live in the hash (#/?t=etf&q=…) so a search can be bookmarked or shared.
@@ -54,8 +55,8 @@ function readFilters(): Filters {
     platforms: params.get('p')?.split(',').filter((p) => catalog.platforms.includes(p)) ?? [],
     onlyNew: params.get('n') === '1',
     sort: { key, dir: params.get('d') === '-1' ? -1 : params.has('s') ? 1 : DEFAULTS.sort.dir },
-    detail: byId.has(params.get('f') ?? '') ? params.get('f')! : '',
-    compare: params.get('cmp')?.split(',').filter((id) => byId.has(id)).slice(0, 3) ?? [],
+    detail: productById(params.get('f') ?? '') ? params.get('f')! : '',
+    compare: params.get('cmp')?.split(',').filter((id) => productById(id)).slice(0, 3) ?? [],
     compareOpen: params.get('vs') === '1',
   };
 }
@@ -86,14 +87,16 @@ const SORT_LABELS: Record<ProductType, [SortKey, string][]> = {
   fondo: [['totalCost', 'Coste total'], ['return3y', 'Rentabilidad 3 años'], ['return5y', 'Rentabilidad 5 años'], ['name', 'Nombre'], ['addedAt', 'Recién añadidos']],
   etf: [['totalCost', 'TER'], ['name', 'Nombre'], ['addedAt', 'Recién añadidos']],
   plan: [['totalCost', 'Coste total'], ['name', 'Nombre'], ['addedAt', 'Recién añadidos']],
+  alt: [['totalCost', 'Coste'], ['name', 'Nombre'], ['addedAt', 'Recién añadidos']],
 };
 
 export function Catalog() {
   const [f, setF] = useState<Filters>(readFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const detail = f.detail ? byId.get(f.detail)! : null;
+  useExternal(); // re-render when a looked-up product is added
+  const detail = f.detail ? productById(f.detail) ?? null : null;
   const setDetail = (p: Product | null) => update({ detail: p?.id ?? '' });
-  const compare = f.compare.map((id) => byId.get(id)!);
+  const compare = f.compare.map((id) => productById(id)).filter((p): p is Product => p != null);
   const compareOpen = f.compareOpen && compare.length >= 2;
   const setCompareOpen = (open: boolean) => update({ compareOpen: open });
   const toggleCompare = (p: Product) =>
@@ -164,6 +167,8 @@ export function Catalog() {
         ))}
       </div>
 
+      {f.type === 'alt' && <AltNotice />}
+
       <section className="picks" aria-labelledby="picks-title">
         <h2 id="picks-title">Los más baratos de cada categoría</h2>
         <div className="picks-row">
@@ -171,7 +176,7 @@ export function Catalog() {
             <button key={p.id} className="pick" onClick={() => setDetail(p)}>
               <span className="pick-cat"><AssetTag p={p} /> {f.type === 'plan' ? p.assetClass : p.region ?? p.assetClass}</span>
               <span className="pick-name">{p.name}</span>
-              <span className="pick-cost">{fmtPct(p.totalCost, f.type === 'plan' ? 3 : 2)}<span className="muted small"> {f.type === 'etf' ? 'TER' : 'coste total'}</span></span>
+              <span className="pick-cost">{fmtPct(p.totalCost, f.type === 'plan' ? 3 : 2)}<span className="muted small"> {f.type === 'etf' ? 'TER' : f.type === 'alt' ? 'coste' : 'coste total'}</span></span>
             </button>
           ))}
         </div>
@@ -180,7 +185,7 @@ export function Catalog() {
       <div className="search-row">
         <input
           type="search"
-          placeholder={f.type === 'etf' ? 'Buscar por nombre, ISIN o ticker…' : 'Buscar por nombre, ISIN o índice…'}
+          placeholder={f.type === 'etf' || f.type === 'alt' ? 'Buscar por nombre, ISIN o ticker…' : 'Buscar por nombre, ISIN o índice…'}
           value={f.query}
           onChange={(e) => update({ query: e.target.value })}
           aria-label="Buscar"
@@ -196,8 +201,8 @@ export function Catalog() {
             <option value="">Todos los activos</option>
             {classes.map((c) => <option key={c}>{c}</option>)}
           </select>
-          <select value={f.region} onChange={(e) => update({ region: e.target.value })} aria-label={f.type === 'plan' ? 'Gestora' : 'Región o plazo'}>
-            <option value="">{f.type === 'plan' ? 'Todas las gestoras' : 'Todas las regiones / plazos'}</option>
+          <select value={f.region} onChange={(e) => update({ region: e.target.value })} aria-label={f.type === 'plan' ? 'Gestora' : f.type === 'alt' ? 'Subyacente' : 'Región o plazo'}>
+            <option value="">{f.type === 'plan' ? 'Todas las gestoras' : f.type === 'alt' ? 'Todos los subyacentes' : 'Todas las regiones / plazos'}</option>
             {regions.map((r) => <option key={r}>{r}</option>)}
           </select>
           <select
@@ -259,12 +264,14 @@ export function Catalog() {
             <tr>
               {th('name', 'Nombre')}
               <th>{f.type === 'plan' ? 'Gestora' : 'Categoría'}</th>
-              {th('totalCost', f.type === 'etf' ? 'TER' : 'Coste total', 'num')}
+              {th('totalCost', f.type === 'etf' ? 'TER' : f.type === 'alt' ? 'Coste' : 'Coste total', 'num')}
               {f.type === 'fondo' && th('return3y', 'Rent. 3 a', 'num')}
               {f.type === 'fondo' && th('return5y', 'Rent. 5 a', 'num')}
               {f.type === 'fondo' && <th>Plataformas</th>}
               {f.type === 'etf' && <th>Ticker</th>}
               {f.type === 'etf' && <th>Dividendos</th>}
+              {f.type === 'alt' && <th>Estructura</th>}
+              {f.type === 'alt' && <th>Ticker</th>}
               {f.type === 'plan' && <th className="num">RV / RF</th>}
               {f.type === 'plan' && <th>Código DGS</th>}
               <th className="compare-col"><span className="sr-only">Comparar</span></th>
@@ -277,7 +284,9 @@ export function Catalog() {
             ))}
           </tbody>
         </table>
-        {!rows.length && (
+        {!rows.length && ISIN_RE.test(f.query.trim().toUpperCase()) ? (
+          <IsinLookup isin={f.query.trim().toUpperCase()} onOpen={setDetail} />
+        ) : !rows.length && (
           <div className="empty">
             <p>Ningún producto coincide con los filtros.</p>
             {activeFilters > 0 && <button className="btn" onClick={clearFilters}>Quitar filtros</button>}
@@ -312,6 +321,76 @@ export function Catalog() {
   );
 }
 
+const TYPE_NAMES: Record<ProductType, string> = { fondo: 'Fondos indexados', etf: 'ETFs', plan: 'Planes de pensiones', alt: 'Cripto y materias primas' };
+
+/** The search is an ISIN with no results here: point to it in another tab, or look it up outside the catalog. */
+function IsinLookup({ isin, onOpen }: { isin: string; onOpen: (p: Product) => void }) {
+  const external = useExternal().find((p) => p.isin === isin);
+  const inCatalog = catalog.items.find((p) => p.isin === isin);
+  const [status, setStatus] = useState<'idle' | 'loading' | 'notfound' | 'error'>('idle');
+  useEffect(() => setStatus('idle'), [isin]);
+
+  const search = async () => {
+    setStatus('loading');
+    try {
+      const p = await lookupExternal(isin);
+      if (p) { setStatus('idle'); onOpen(p); } else setStatus('notfound');
+    } catch {
+      setStatus('error');
+    }
+  };
+
+  if (inCatalog) {
+    return (
+      <div className="empty">
+        <p><strong>{inCatalog.name}</strong> está en <strong>{TYPE_NAMES[inCatalog.type]}</strong>, no en esta lista o filtros.</p>
+        <button className="btn" onClick={() => onOpen(inCatalog)}>Ver ficha</button>
+      </div>
+    );
+  }
+  if (external) {
+    return (
+      <div className="empty isin-lookup">
+        <p className="small muted">No está en el catálogo. Ya lo buscaste antes:</p>
+        <button className="pick" onClick={() => onOpen(external)}>
+          <span className="pick-cat"><AssetTag p={external} /> {external.region ?? 'Sin categoría'}</span>
+          <span className="pick-name">{external.name}</span>
+          <span className="pick-cost">{external.totalCost != null ? fmtPct(external.totalCost) : '—'}<span className="muted small"> gastos corrientes</span></span>
+          <span className="badge-ext">No catalogado</span>
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="empty isin-lookup">
+      <p><span className="mono">{isin}</span> no está en el catálogo.</p>
+      <button className="btn btn-primary" onClick={search} disabled={status === 'loading'} aria-busy={status === 'loading'}>
+        {status === 'loading' ? 'Buscando…' : 'Buscar este ISIN fuera del catálogo'}
+      </button>
+      {status === 'notfound' && <p className="small neg" role="status">No lo encontramos en FT.com ni en OpenFIGI. Revisa el ISIN.</p>}
+      {status === 'error' && <p className="small neg" role="alert">No se pudo consultar ahora. Inténtalo de nuevo en un momento.</p>}
+      <p className="muted small">Se consulta solo el ISIN (vía FT.com). El resultado se guarda únicamente en este navegador.</p>
+    </div>
+  );
+}
+
+/** Shown on the "Cripto y materias primas" tab: what these products are and why they are riskier. */
+function AltNotice() {
+  return (
+    <div className="warning alt-notice" role="note">
+      <p>
+        <strong>Productos de alto riesgo.</strong> ETN de criptomonedas, ETC de metales y ETP de materias primas: no generan
+        rentas, pueden caer más de un 50 % y los ETN/ETC no son fondos UCITS (llevan riesgo del emisor, mitigado si el
+        respaldo es físico).
+      </p>
+      <p className="small">
+        Se compran en bolsa como una acción (no admiten traspasos sin tributar). Lista seleccionada por Invertario, no
+        está en la hoja comunitaria; disponibilidad según tu bróker (busca por ISIN o ticker).
+      </p>
+    </div>
+  );
+}
+
 function Hero() {
   const count = (t: ProductType) => catalog.items.filter((p) => p.type === t).length;
   const newOnes = catalog.items.filter((p) => isNew(p)).length;
@@ -329,7 +408,7 @@ function Hero() {
         </p>
       </div>
       <dl className="hero-stats">
-        <div><dt>Productos</dt><dd>{catalog.items.length}</dd><span className="muted small">{count('fondo')} fondos · {count('etf')} ETFs · {count('plan')} planes</span></div>
+        <div><dt>Productos</dt><dd>{catalog.items.length}</dd><span className="muted small">{count('fondo')} fondos · {count('etf')} ETFs · {count('plan')} planes · {count('alt')} cripto y mat. primas</span></div>
         {cheapestWorld && (
           <div><dt>Fondo global más barato</dt><dd>{fmtPct(cheapestWorld.totalCost)}</dd><span className="muted small">{cheapestWorld.name}</span></div>
         )}
@@ -351,7 +430,8 @@ function Row({ p, onOpen, compared, compareFull, onToggleCompare }: {
       ? `TER ${fmtPct(p.ter)} + costes operativos ${fmtPct(p.operatingCosts)}`
       : p.type === 'plan'
         ? `Gestión+depósito ${fmtPct(p.managementFee)} · fondos ${fmtPct(p.fundsFee, 3)} · otros ${fmtPct(p.otherFees, 3)}`
-        : undefined;
+        : p.note ?? undefined;
+  const costLabel = p.type === 'etf' ? 'TER' : p.type === 'alt' ? 'Coste' : 'Coste total';
   return (
     <tr>
       <td data-label="Nombre" className="name-cell">
@@ -372,7 +452,7 @@ function Row({ p, onOpen, compared, compareFull, onToggleCompare }: {
           </>
         )}
       </td>
-      <td data-label={p.type === 'etf' ? 'TER' : 'Coste total'} className="num" title={costDetail}>
+      <td data-label={costLabel} className="num" title={costDetail}>
         <strong>{fmtPct(p.totalCost, p.type === 'plan' ? 3 : 2)}</strong>
         <CostBar p={p} />
       </td>
@@ -387,6 +467,8 @@ function Row({ p, onOpen, compared, compareFull, onToggleCompare }: {
       )}
       {p.type === 'etf' && <td data-label="Ticker" className="mono">{p.ticker}</td>}
       {p.type === 'etf' && <td data-label="Dividendos">{p.distribution ?? '—'}{p.currency && p.currency !== 'EUR' ? ` · ${p.currency}` : ''}</td>}
+      {p.type === 'alt' && <td data-label="Estructura">{p.structure} · {p.backing}</td>}
+      {p.type === 'alt' && <td data-label="Ticker"><span className="mono">{p.ticker}</span> <span className="muted small">{p.exchange}</span></td>}
       {p.type === 'plan' && <td data-label="RV / RF" className="num">{p.equityPct != null ? `${p.equityPct} / ${100 - p.equityPct}` : '—'}</td>}
       {p.type === 'plan' && <td data-label="Código DGS" className="mono">{p.dgsCode ?? '—'}</td>}
       <td className="compare-cell">

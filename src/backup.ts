@@ -1,21 +1,24 @@
 // Export / import / wipe of everything Invertario keeps in this browser (localStorage only).
-import type { Holding } from './portfolio';
+import { DEFAULT_FOLIO, type Folio, FOLIOS_KEY, type Holding, loadFolios } from './portfolio';
 import type { SimPortfolio } from './sims';
+import type { Product } from './types';
 
 /** Any view can open the "Tus datos" sheet with dispatchEvent(new Event(OPEN_DATA_EVENT)). */
 export const OPEN_DATA_EVENT = 'invertario:open-data';
 
 const KEYS = {
-  portfolio: 'invertario.portfolio.v1',
+  legacyPortfolio: 'invertario.portfolio.v1',
+  portfolios: FOLIOS_KEY,
   sims: 'invertario.sims.v1',
   theme: 'invertario.theme',
+  external: 'invertario.external.v1',
 } as const;
 
 export interface Backup {
   app: 'invertario';
   version: 1;
   exportedAt: string;
-  data: { portfolio: Holding[]; sims: SimPortfolio[]; theme: string | null };
+  data: { portfolios: Folio[]; sims: SimPortfolio[]; theme: string | null; external: Product[] };
 }
 
 const read = <T>(key: string, fallback: T): T => {
@@ -30,11 +33,12 @@ const read = <T>(key: string, fallback: T): T => {
 export function currentData(): Backup['data'] {
   let theme: string | null = null;
   try { theme = localStorage.getItem(KEYS.theme); } catch { /* ignore */ }
-  return { portfolio: read<Holding[]>(KEYS.portfolio, []), sims: read<SimPortfolio[]>(KEYS.sims, []), theme };
+  return { portfolios: loadFolios().filter((f) => f.holdings.length || f.id !== DEFAULT_FOLIO), sims: read<SimPortfolio[]>(KEYS.sims, []), theme, external: read<Product[]>(KEYS.external, []) };
 }
 
 export function summary(d: Backup['data']) {
-  return { funds: d.portfolio.length, lots: d.portfolio.reduce((a, h) => a + (h.lots?.length ?? 0), 0), sims: d.sims.length };
+  const holdings = d.portfolios.flatMap((f) => f.holdings);
+  return { funds: holdings.length, lots: holdings.reduce((a, h) => a + (h.lots?.length ?? 0), 0), sims: d.sims.length, folios: d.portfolios.length };
 }
 
 export function downloadBackup() {
@@ -63,28 +67,45 @@ export function parseBackup(text: string): Backup {
     throw new Error('El archivo no es un JSON válido.');
   }
   if (b?.app !== 'invertario' || b.version !== 1 || !b.data) throw new Error('El archivo no es una copia de seguridad de Invertario.');
-  const portfolio = Array.isArray(b.data.portfolio) ? b.data.portfolio : [];
+  // Copies made before several portfolios existed carry a single `portfolio` (list of holdings).
+  const raw = b.data as Backup['data'] & { portfolio?: Holding[] };
+  const portfolios: Folio[] = Array.isArray(raw.portfolios) ? raw.portfolios
+    : Array.isArray(raw.portfolio) && raw.portfolio.length ? [{ id: DEFAULT_FOLIO, name: 'Mi cartera', holdings: raw.portfolio }] : [];
   const sims = Array.isArray(b.data.sims) ? b.data.sims : [];
-  if (!portfolio.every(isHolding) || !sims.every(isSim)) throw new Error('La copia de seguridad está dañada o incompleta.');
+  const okFolio = (f: Folio) => !!f && typeof f.id === 'string' && typeof f.name === 'string' && Array.isArray(f.holdings) && f.holdings.every(isHolding);
+  if (!portfolios.every(okFolio) || !sims.every(isSim)) throw new Error('La copia de seguridad está dañada o incompleta.');
   const theme = b.data.theme === 'light' || b.data.theme === 'dark' ? b.data.theme : null;
-  return { ...b, data: { portfolio, sims, theme } };
+  // Older backups have no looked-up products; keep only well-formed ones.
+  const external = (Array.isArray(b.data.external) ? b.data.external : [])
+    .filter((p) => p && typeof p.id === 'string' && p.id.startsWith('ext-') && typeof p.name === 'string' && p.external);
+  return { ...b, data: { portfolios, sims, theme, external } };
 }
 
 /** "replace" overwrites everything; "merge" keeps current data and adds/updates by ISIN and simulation id. */
 export function applyBackup(b: Backup, mode: 'replace' | 'merge') {
   const cur = currentData();
   const next = mode === 'replace' ? b.data : {
-    portfolio: [...cur.portfolio.filter((h) => !b.data.portfolio.some((x) => x.isin === h.isin)), ...b.data.portfolio],
+    // same portfolio (by id): funds merged by ISIN; other portfolios added
+    portfolios: [
+      ...cur.portfolios.map((f) => {
+        const inc = b.data.portfolios.find((x) => x.id === f.id);
+        return inc ? { ...f, holdings: [...f.holdings.filter((h) => !inc.holdings.some((x) => x.isin === h.isin)), ...inc.holdings] } : f;
+      }),
+      ...b.data.portfolios.filter((x) => !cur.portfolios.some((f) => f.id === x.id)),
+    ],
     sims: [...cur.sims.filter((s) => !b.data.sims.some((x) => x.id === s.id)), ...b.data.sims],
     theme: b.data.theme ?? cur.theme,
+    external: [...cur.external.filter((p) => !b.data.external.some((x) => x.id === p.id)), ...b.data.external],
   };
   const set = (key: string, value: unknown[] | string | null) => {
     if (value == null || (Array.isArray(value) && !value.length)) localStorage.removeItem(key);
     else localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
   };
-  set(KEYS.portfolio, next.portfolio);
+  set(KEYS.portfolios, next.portfolios);
+  set(KEYS.legacyPortfolio, null);
   set(KEYS.sims, next.sims);
   set(KEYS.theme, next.theme);
+  set(KEYS.external, next.external);
 }
 
 export function clearAll() {

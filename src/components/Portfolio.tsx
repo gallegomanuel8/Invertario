@@ -1,32 +1,42 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { byIsin, cheaperAlternative } from '../data';
 import { fmtDate, fmtEur, fmtEur0, fmtPct, fmtSignedEur, fmtSignedPct } from '../format';
-import { externalProduct, fetchNavs, type Holding, LOOKUP_VERSION, navFactor, pricesStale, withLiveValues, loadHoldings, lookupFundInfo, needsLookup, parseHoldingCsv, saveHoldings, sum, totals } from '../portfolio';
+import { detectTransfers, externalProduct, fetchNavs, type Folio, type Holding, loadFolios, LOOKUP_VERSION, lookupFundInfo, mergeImport, navFactor, needsLookup, newFolioId, parseHoldingCsv, pricesStale, saveFolios, sum, totals, type Transfer, withLiveValues } from '../portfolio';
 import { assetTypeSlices, blend, projectFrom } from '../simulate';
 import type { ReturnMode } from '../sims';
 import type { Product } from '../types';
 import { OPEN_DATA_EVENT } from '../backup';
-import { AssetTag } from './bits';
+import { AssetTag, useDismissDetails } from './bits';
 import { BarList, Donut, TimelineChart } from './Charts';
 
 
 const HORIZON_YEARS = 20;
 
-// ISINs whose prices were already requested during this page load (forced refreshes ignore it).
+// Holdings (ISIN@import) whose prices were already requested during this page load (forced refreshes ignore it).
 const priceAttempted = new Set<string>();
 
 // ISINs already looked up during this page load (module-level so remounts don't repeat requests).
 const attempted = new Set<string>();
 
+const readFolioId = () => decodeURIComponent(location.hash.match(/^#\/cartera\/([\w-]+)/)?.[1] ?? '');
+
 export function Portfolio() {
-  const [holdings, setHoldings] = useState<Holding[]>(loadHoldings);
+  const [folios, setFolios] = useState<Folio[]>(loadFolios);
+  const [activeId, setActiveId] = useState(readFolioId);
+  const folio = folios.find((f) => f.id === activeId) ?? folios[0];
+  const holdings = folio.holdings;
+  // Updates the holdings of the portfolio that was active when the update was scheduled.
+  const folioId = folio.id;
+  const setHoldings = (upd: Holding[] | ((cur: Holding[]) => Holding[])) =>
+    setFolios((fs) => fs.map((f) => (f.id === folioId ? { ...f, holdings: typeof upd === 'function' ? upd(f.holdings) : upd } : f)));
   const [errors, setErrors] = useState<string[]>([]);
+  const [notices, setNotices] = useState<string[]>([]);
   const [dragging, setDragging] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   const [removed, setRemoved] = useState<{ holding: Holding; index: number } | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
-  useEffect(() => saveHoldings(holdings), [holdings]);
+  useEffect(() => saveFolios(folios), [folios]);
 
   // Identify funds missing from the catalog by ISIN (only the ISIN is sent; see lookupFundInfo).
   const [looking, setLooking] = useState<string[]>([]);
@@ -46,9 +56,11 @@ export function Portfolio() {
   // Live values: refresh NAVs automatically when older than PRICE_TTL_MS, or on demand (sends only ISIN + a date).
   const [refreshing, setRefreshing] = useState(false);
   const refreshPrices = async (force: boolean) => {
-    const targets = holdings.filter((h) => force || (pricesStale(h) && !priceAttempted.has(h.isin)));
+    // keyed by import too: a re-imported CSV needs prices for its own date
+    const key = (h: Holding) => `${h.isin}@${h.importedAt}`;
+    const targets = holdings.filter((h) => force || (pricesStale(h) && !priceAttempted.has(key(h))));
     if (!targets.length) return;
-    targets.forEach((h) => priceAttempted.add(h.isin));
+    targets.forEach((h) => priceAttempted.add(key(h)));
     setRefreshing(true);
     const results = await Promise.allSettled(targets.map((h) => fetchNavs(h).then((r) => ({ isin: h.isin, ...r }))));
     const ok = new Map(results.flatMap((r) => (r.status === 'fulfilled' ? [[r.value.isin, r.value] as const] : [])));
@@ -75,27 +87,28 @@ export function Portfolio() {
     const parsed: Holding[] = [];
     for (const f of Array.from(files)) {
       try {
-        parsed.push(parseHoldingCsv(f.name, await f.text()));
+        parsed.push(parseHoldingCsv(f.name, await f.text(), f.lastModified));
       } catch (e) {
         errs.push((e as Error).message);
       }
     }
     setErrors(errs);
-    if (parsed.length) {
-      setHoldings((cur) => [
-        ...cur.filter((h) => !parsed.some((p) => p.isin === h.isin)),
-        ...parsed.map((p) => {
-          // keep the user's name and the identified fund data; prices restart from the new CSV
-          const prev = cur.find((h) => h.isin === p.isin);
-          return { ...p, name: prev?.name, info: prev?.info, infoCheckedAt: prev?.infoCheckedAt, infoVersion: prev?.infoVersion };
-        }),
-      ]);
-    }
+    if (!parsed.length) return setNotices([]);
+    const { holdings: next, duplicates, stale } = mergeImport(holdings, parsed);
+    const notes: string[] = [];
+    if (duplicates) notes.push(`${duplicates === 1 ? 'Un fondo venía' : `${duplicates} fondos venían`} en dos archivos (p. ej. «… 2.csv»): se ha usado el más reciente.`);
+    if (stale.length) notes.push(`${stale.length === 1 ? `«${stale[0]}» es más antiguo` : `${stale.length} archivos son más antiguos`} que lo ya importado: se mantiene lo actual.`);
+    setNotices(notes);
+    setHoldings(next);
   }
+
+  // Funds transferred to another fund stay stored (to measure the transfer) but leave the totals.
+  const transfers = useMemo(() => detectTransfers(holdings), [holdings]);
+  const active = useMemo(() => holdings.filter((h) => !transfers.some((t) => t.from === h)), [holdings, transfers]);
 
   const rows = useMemo(
     () =>
-      holdings
+      active
         .map((h) => {
           const catalogProduct = byIsin.get(h.isin);
           const product = catalogProduct ?? (h.info ? externalProduct(h.info) : undefined);
@@ -107,7 +120,7 @@ export function Portfolio() {
           };
         })
         .sort((a, b) => b.value - a.value),
-    [holdings],
+    [active],
   );
   const all = totals(rows.flatMap((r) => r.live.lots));
   const latestNav = rows.map((r) => r.h.nav?.date).filter(Boolean).sort().at(-1);
@@ -122,10 +135,10 @@ export function Portfolio() {
 
   const contributions = useMemo(() => {
     const byDate = new Map<string, number>();
-    for (const l of holdings.flatMap((h) => h.lots)) byDate.set(l.date, (byDate.get(l.date) ?? 0) + l.invested);
+    for (const l of active.flatMap((h) => h.lots)) byDate.set(l.date, (byDate.get(l.date) ?? 0) + l.invested);
     let acc = 0;
     return [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, v]) => ({ date, value: (acc += v) }));
-  }, [holdings]);
+  }, [active]);
 
   // ---- Projection to 20 years after the first contribution ----
   const [mode, setMode] = useState<Exclude<ReturnMode, 'personalizada'>>('prudente');
@@ -138,12 +151,12 @@ export function Portfolio() {
   const monthsLeft = Math.max(0, (horizon.getFullYear() - now.getFullYear()) * 12 + horizon.getMonth() - now.getMonth());
   // Default monthly contribution: what was invested over the last 12 months (first purchase excluded, it is usually a lump sum).
   const avgMonthly = useMemo(() => {
-    const lots = holdings.flatMap((h) => h.lots).filter((l) => l.date !== contributions[0]?.date);
+    const lots = active.flatMap((h) => h.lots).filter((l) => l.date !== contributions[0]?.date);
     const since = new Date(now); since.setFullYear(since.getFullYear() - 1);
     const recent = lots.filter((l) => new Date(l.date) >= since);
     const months = Math.min(12, Math.max(1, Math.round((now.getTime() - firstDate.getTime()) / (30.44 * 86_400_000))));
     return Math.round(sum(recent.map((l) => l.invested)) / months);
-  }, [holdings]); // depends only on the imported lots
+  }, [active]); // depends only on the imported lots
   const monthly = monthlyInput ?? avgMonthly;
   const assumptions = blend(
     rows.map((r) => ({ product: r.product ?? ({ id: r.h.isin, type: 'fondo', isin: r.h.isin, name: r.name, assetClass: null, region: null, totalCost: 0, addedAt: null } satisfies Product), amount: r.value })),
@@ -184,52 +197,117 @@ export function Portfolio() {
   };
 
   const clear = () => {
-    if (confirm('¿Borrar la cartera importada de este navegador? Tus carteras simuladas no se tocan. No se puede deshacer: exporta antes una copia si la quieres conservar.')) {
+    if (confirm(`¿Borrar los fondos de «${folio.name}» de este navegador? Tus otras carteras y las simuladas no se tocan. No se puede deshacer: exporta antes una copia si la quieres conservar.`)) {
       setHoldings([]);
       setErrors([]);
+      setNotices([]);
       setRemoved(null);
     }
   };
 
-  return (
-    <section>
-      <div className="hero hero-compact">
-        <div className="hero-text">
-          <p className="eyebrow">Área personal</p>
-          <h1>Mi cartera</h1>
-          <p className="muted">
-            Importa los CSV de <em>plusvalías y minusvalías</em> de cada fondo (uno por fondo; el ISIN se toma del nombre del archivo)
-            y sigue su evolución, su reparto y sus costes.
-          </p>
-        </div>
-        <p className="privacy">
-          <span aria-hidden>🔒</span> Tus datos se procesan y guardan <strong>solo en este navegador</strong> y puedes borrarlos cuando quieras.
-          Para actualizar valores e identificar fondos se consulta <strong>solo el ISIN</strong> de cada fondo (vía FT.com); nunca importes ni movimientos.{' '}
-          <button className="link" onClick={() => dispatchEvent(new Event(OPEN_DATA_EVENT))}>Exportar o importar tus datos</button>
-        </p>
-      </div>
+  // ---- Several portfolios ----
+  const selectFolio = (id: string) => {
+    setActiveId(id);
+    setErrors([]); setNotices([]); setRemoved(null); setOpen(null); setMonthlyInput(null);
+    history.replaceState(null, '', `#/cartera/${id}`);
+  };
+  const newFolio = () => {
+    const name = prompt('Nombre de la nueva cartera:', `Cartera ${folios.length + 1}`)?.trim();
+    if (!name) return;
+    const f: Folio = { id: newFolioId(), name, holdings: [] };
+    setFolios((fs) => [...fs, f]);
+    selectFolio(f.id);
+  };
+  const renameFolio = () => {
+    const name = prompt('Nuevo nombre de la cartera:', folio.name)?.trim();
+    if (name) setFolios((fs) => fs.map((f) => (f.id === folio.id ? { ...f, name } : f)));
+  };
+  const deleteFolio = (target: Folio) => {
+    if (folios.length < 2) return;
+    const n = target.holdings.length;
+    if (!confirm(`¿Eliminar la cartera «${target.name}»${n ? ` y sus ${n} ${n === 1 ? 'fondo' : 'fondos'}` : ''} de este navegador? No se puede deshacer: exporta antes una copia si la quieres conservar.`)) return;
+    const rest = folios.filter((f) => f.id !== target.id);
+    setFolios(rest);
+    if (target.id === folio.id) selectFolio(rest[0].id);
+  };
+  const markNotTransfer = (t: Transfer) =>
+    setHoldings((cur) => cur.map((h) => (h === t.from ? { ...h, notTransferTo: [...(h.notTransferTo ?? []), t.to.isin] } : h)));
+  const productName = (h: Holding) => byIsin.get(h.isin)?.name ?? h.name ?? h.info?.name ?? h.isin;
 
-      <div
-        className={`dropzone${dragging ? ' dragging' : ''}${rows.length ? ' compact' : ''}`}
-        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(e) => { e.preventDefault(); setDragging(false); importFiles(e.dataTransfer.files); }}
-      >
-        {rows.length ? (
-          <>
-            <button className="btn" onClick={() => input.current?.click()}>Añadir o actualizar CSV</button>
-            <span className="muted small">o arrástralos aquí. Reimportar un fondo sustituye sus datos.</span>
-          </>
-        ) : (
-          <>
+  const privacyRef = useRef<HTMLDetailsElement>(null);
+  useDismissDetails(privacyRef);
+
+  const folioBar = folios.length > 1 && (
+    <div className="folio-bar">
+      <div className="sim-tabs" role="tablist" aria-label="Tus carteras">
+        {folios.map((f) => (
+          <span key={f.id} className={`folio-tab${f.id === folio.id ? ' active' : ''}`}>
+            <button role="tab" aria-selected={f.id === folio.id} onClick={() => selectFolio(f.id)}>
+              {f.name} <span className="count">{f.holdings.length - detectTransfers(f.holdings).length}</span>
+            </button>
+            <button className="folio-del" onClick={() => deleteFolio(f)} aria-label={`Eliminar la cartera ${f.name}`} title="Eliminar esta cartera">✕</button>
+          </span>
+        ))}
+      </div>
+      <span className="folio-actions small">
+        <button className="link" onClick={renameFolio}>Renombrar «{folio.name}»</button>
+      </span>
+    </div>
+  );
+
+  return (
+    <section
+      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false); }}
+      onDrop={(e) => { e.preventDefault(); setDragging(false); importFiles(e.dataTransfer.files); }}
+    >
+      <input ref={input} type="file" accept=".csv,text/csv" multiple hidden
+        onChange={(e) => { if (e.target.files) importFiles(e.target.files); e.target.value = ''; }} />
+      {rows.length ? (
+        // With a portfolio loaded, the intro and the drop zone give way to a slim header.
+        <>
+          <div className="page-head">
+            <h1>{folios.length > 1 ? 'Mis carteras' : folio.name}</h1>
+            <div className="page-head-actions">
+              <button className="btn btn-sm" onClick={newFolio} title="Sigue otra cartera por separado (por ejemplo, la de otra persona o de otro bróker)">+ Cartera</button>
+              <button className="btn btn-sm" onClick={() => input.current?.click()} title="También puedes arrastrarlos a la página. Reimportar un fondo sustituye sus datos.">
+                + Añadir CSV
+              </button>
+              <details className="privacy-pop" ref={privacyRef}>
+                <summary className="btn btn-sm"><span aria-hidden>🔒</span> Privacidad</summary>
+                <div className="privacy-pop-body">
+                  <PrivacyText />
+                </div>
+              </details>
+            </div>
+            {dragging && <div className="drop-overlay" aria-hidden>Suelta los CSV para importarlos</div>}
+          </div>
+          {folioBar}
+        </>
+      ) : (
+        <>
+          <div className="hero hero-compact">
+            <div className="hero-text">
+              <p className="eyebrow">Área personal</p>
+              <h1>{folio.name}</h1>
+              <p className="muted">
+                Importa los CSV de <em>plusvalías y minusvalías</em> de cada fondo (uno por fondo; el ISIN se toma del nombre del archivo)
+                y sigue su evolución, su reparto y sus costes.
+              </p>
+            </div>
+            <p className="privacy"><PrivacyText /></p>
+          </div>
+          {folioBar}
+          <div className={`dropzone${dragging ? ' dragging' : ''}`}>
             <p><strong>Arrastra aquí tus CSV</strong> o</p>
             <button className="btn" onClick={() => input.current?.click()}>Seleccionar archivos</button>
             <p className="muted small">Formato: <code>Fecha fiscal;Inversión;Valor de mercado;Resultado fiscal</code>. Reimportar un fondo sustituye sus datos.</p>
-          </>
-        )}
-        <input ref={input} type="file" accept=".csv,text/csv" multiple hidden
-          onChange={(e) => { if (e.target.files) importFiles(e.target.files); e.target.value = ''; }} />
-      </div>
+            {folios.length === 1 && (
+              <p className="muted small">¿Sigues más de una cartera? <button className="link" onClick={newFolio}>Crea otra</button> y llévalas por separado.</p>
+            )}
+          </div>
+        </>
+      )}
 
       {removed && (
         <div className="toast" role="status">
@@ -254,6 +332,9 @@ export function Portfolio() {
 
       {errors.length > 0 && (
         <ul className="errors" role="alert">{errors.map((e) => <li key={e}>{e}</li>)}</ul>
+      )}
+      {notices.length > 0 && (
+        <ul className="notices" role="status">{notices.map((n) => <li key={n}>{n}</li>)}</ul>
       )}
 
       {rows.length > 0 && (
@@ -350,6 +431,13 @@ export function Portfolio() {
               </figure>
             </div>
           </div>
+
+          {transfers.length > 0 && (
+            <div className="panel transfers">
+              <h2 className="panel-title">Traspasos detectados</h2>
+              {transfers.map((t) => <TransferCard key={t.from.isin + t.to.isin} t={t} name={productName} onDismiss={() => markNotTransfer(t)} />)}
+            </div>
+          )}
 
           <div className="panel">
             <div className="panel-head">
@@ -455,6 +543,44 @@ export function Portfolio() {
   );
 }
 
+/**
+ * What the transferred lots are worth today in the destination fund, versus what they would be worth had they
+ * stayed in the origin (origin CSV value moved with the origin's NAV). The gap is the cost (or gain) of switching:
+ * days out of the market plus the two funds' different paths since.
+ */
+function TransferCard({ t, name, onDismiss }: { t: Transfer; name: (h: Holding) => string; onDismiss: () => void }) {
+  const invested = sum(t.lots.map((l) => l.invested));
+  const actual = sum(t.lots.map((l) => l.value)) * navFactor(t.to);
+  const wouldBe = sum(withLiveValues(t.from).lots.map((l) => l.value));
+  const diff = actual - wouldBe;
+  const dateTo = t.to.nav?.date, dateFrom = t.from.nav?.date;
+  const comparable = !!dateTo && dateTo === dateFrom;
+  return (
+    <div className="transfer">
+      <p>
+        <strong>{name(t.from)}</strong> <span aria-hidden>→</span> <strong>{name(t.to)}</strong>
+        <span className="muted small"> · {t.lots.length} aportaciones, {fmtEur(invested)} invertidos</span>
+      </p>
+      <dl className="transfer-kv">
+        <div><dt>Hoy en el fondo nuevo</dt><dd>{fmtEur(actual)}</dd></div>
+        <div><dt>Si no hubieras traspasado</dt><dd>{fmtEur(wouldBe)}</dd></div>
+        <div><dt>{diff < 0 ? 'Pérdida estimada' : 'Ganancia estimada'}</dt>
+          <dd className={diff >= 0 ? 'pos' : 'neg'}>{fmtSignedEur(diff)} <span className="small">({fmtSignedPct(wouldBe ? (diff / wouldBe) * 100 : 0)})</span></dd></div>
+      </dl>
+      <p className="muted small">
+        {comparable ? `Ambos valorados con el valor liquidativo del ${fmtDate(dateTo)}. ` : 'Aproximado: no hay precios de ambos fondos al mismo día, así que la comparación mezcla fechas. '}
+        Incluye los días sin invertir durante el traspaso y la distinta evolución de los dos fondos. El traspaso no tributa: se conservan fechas y coste fiscal.
+        {' '}El fondo de origen ya no suma en los totales. <button className="link" onClick={onDismiss}>No es un traspaso</button>
+      </p>
+      <p className="transfer-note small">
+        <strong>Es una estimación.</strong> Los CSV no traen participaciones ni el precio al que se valoró cada fondo, así que la cifra
+        puede desviarse unos euros. El dato exacto está en las órdenes del traspaso de tu bróker: compara el importe del reembolso
+        con lo que valdrían hoy esas participaciones en el fondo de origen.
+      </p>
+    </div>
+  );
+}
+
 function Kpi({ label, value, sub, tone, wide }: { label: string; value: string; sub?: string; tone?: 'pos' | 'neg'; wide?: boolean }) {
   return (
     <div className={`kpi${wide ? ' kpi-wide' : ''}`}>
@@ -491,3 +617,14 @@ function Lots({ holding }: { holding: Holding }) {
     </div>
   );
 }
+
+function PrivacyText() {
+  return (
+    <>
+      <span aria-hidden>🔒</span> Tus datos se procesan y guardan <strong>solo en este navegador</strong> y puedes borrarlos cuando quieras.
+      Para actualizar valores e identificar fondos se consulta <strong>solo el ISIN</strong> de cada fondo (vía FT.com); nunca importes ni movimientos.{' '}
+      <button className="link" onClick={() => dispatchEvent(new Event(OPEN_DATA_EVENT))}>Exportar o importar tus datos</button>
+    </>
+  );
+}
+

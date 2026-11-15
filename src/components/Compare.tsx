@@ -3,7 +3,7 @@ import { fmtPct, fmtRawPct } from '../format';
 import type { Product } from '../types';
 import { AssetTag } from './bits';
 
-const TYPE_LABEL: Record<Product['type'], string> = { fondo: 'Fondo indexado', etf: 'ETF', plan: 'Plan de pensiones' };
+const TYPE_LABEL: Record<Product['type'], string> = { fondo: 'Fondo indexado', etf: 'ETF', plan: 'Plan de pensiones', alt: 'ETC / ETN' };
 
 interface RowDef {
   label: string;
@@ -15,7 +15,7 @@ interface RowDef {
 
 export function Compare({ items, onRemove, onOpen }: { items: Product[]; onRemove: (p: Product) => void; onOpen: (p: Product) => void }) {
   const allRows: RowDef[] = [
-    { label: 'Tipo', value: (p) => TYPE_LABEL[p.type] },
+    { label: 'Tipo', value: (p) => (p.external ? `${TYPE_LABEL[p.type]} (no catalogado)` : p.type === 'alt' ? `${p.structure} · ${p.backing}` : TYPE_LABEL[p.type]) },
     { label: 'Categoría', value: (p) => [p.assetClass, p.type === 'plan' ? p.provider : p.region].filter(Boolean).join(' · ') },
     { label: 'Índice', value: (p) => p.index },
     { label: 'Coste total', value: (p) => fmtPct(p.totalCost, p.type === 'plan' ? 3 : 2), num: (p) => p.totalCost, better: 'low' },
@@ -27,7 +27,7 @@ export function Compare({ items, onRemove, onOpen }: { items: Product[]; onRemov
     { label: 'RV / RF', value: (p) => (p.equityPct != null ? `${p.equityPct} / ${100 - p.equityPct}` : null) },
     ...catalog.platforms.map((pl): RowDef => ({
       label: pl,
-      value: (p) => (p.type !== 'fondo' ? null : p.platforms?.includes(pl) ? '✓' : '—'),
+      value: (p) => (p.type !== 'fondo' || p.external ? null : p.platforms?.includes(pl) ? '✓' : '—'),
     })),
     { label: 'Préstamo de valores', value: (p) => (p.securitiesLending?.lent ? fmtRawPct(p.securitiesLending.lent) : null) },
   ];

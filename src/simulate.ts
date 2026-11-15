@@ -5,9 +5,17 @@ import type { ReturnMode, SimPortfolio } from './sims';
 /** Long-term, deliberately prudent gross annual returns and volatilities by asset class (%). */
 const PRUDENT = { equity: 6, bonds: 2.5 };
 const VOL = { equity: 15, bonds: 5 };
+/** Crypto, metals and commodities produce no income: low prudent returns, very high volatility. */
+const ALT: Record<string, { ret: number; vol: number }> = {
+  Criptomonedas: { ret: 5, vol: 70 },
+  'Metales preciosos': { ret: 4, vol: 16 },
+  'Materias primas': { ret: 3, vol: 20 },
+};
+const altOf = (p: Product) => (p.type === 'alt' ? ALT[p.assetClass ?? ''] ?? ALT['Materias primas'] : null);
 
 /** Share of equities (0..1) for a product. */
 export function equityShare(p: Product): number {
+  if (p.type === 'alt') return 0;
   if (p.equityPct != null) return p.equityPct / 100;
   if (p.assetClass === 'Renta Variable') return 1;
   if (p.assetClass === 'Renta Fija') return 0;
@@ -27,9 +35,10 @@ export interface FundAssumption {
 export function fundAssumption(p: Product, weight: number, mode: ReturnMode, custom?: number): FundAssumption {
   const eq = equityShare(p);
   const cost = p.totalCost ?? 0;
-  const prudentGross = eq * PRUDENT.equity + (1 - eq) * PRUDENT.bonds;
+  const alt = altOf(p);
+  const prudentGross = alt ? alt.ret : eq * PRUDENT.equity + (1 - eq) * PRUDENT.bonds;
   let netReturn = prudentGross - cost;
-  let source = 'Prudente por tipo de activo';
+  let source = alt ? `Prudente (${p.assetClass?.toLowerCase()})` : 'Prudente por tipo de activo';
   if (mode === 'historica' && p.return5y != null) {
     netReturn = p.return5y; // published returns are already net of the fund's costs
     source = 'Histórica 5 años (ya neta de costes)';
@@ -39,7 +48,8 @@ export function fundAssumption(p: Product, weight: number, mode: ReturnMode, cus
     netReturn = custom - cost;
     source = 'Personalizada (bruta, menos costes)';
   }
-  return { product: p, weight, cost, netReturn, volatility: eq * VOL.equity + (1 - eq) * VOL.bonds, source };
+  const volatility = alt ? alt.vol : eq * VOL.equity + (1 - eq) * VOL.bonds;
+  return { product: p, weight, cost, netReturn, volatility, source };
 }
 
 export interface YearRow {
@@ -114,9 +124,15 @@ export function toCsv(rows: YearRow[]) {
 
 /** Splits weighted amounts into equity / fixed income exposure (mixed funds count proportionally). */
 export function assetTypeSlices(items: { product?: Product; amount: number }[]) {
-  let equity = 0, bonds = 0, unknown = 0;
+  let equity = 0, bonds = 0, unknown = 0, commodities = 0, crypto = 0;
   for (const { product, amount } of items) {
-    if (!product) { unknown += amount; continue; }
+    // Looked-up products without a known asset class are not guessed as 50/50 here.
+    if (!product || (product.external && !product.assetClass)) { unknown += amount; continue; }
+    if (product.type === 'alt') {
+      if (product.assetClass === 'Criptomonedas') crypto += amount;
+      else commodities += amount;
+      continue;
+    }
     const eq = equityShare(product);
     equity += amount * eq;
     bonds += amount * (1 - eq);
@@ -124,6 +140,8 @@ export function assetTypeSlices(items: { product?: Product; amount: number }[]) 
   return [
     { label: 'Renta variable', value: equity, color: 'var(--cat-1)' },
     { label: 'Renta fija', value: bonds, color: 'var(--cat-3)' },
+    { label: 'Materias primas y metales', value: commodities, color: 'var(--cat-4)' },
+    { label: 'Criptomonedas', value: crypto, color: 'var(--cat-5)' },
     { label: 'Sin clasificar', value: unknown, color: 'var(--cat-other)' },
   ].filter((s) => s.value > 0);
 }

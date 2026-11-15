@@ -44,13 +44,13 @@ export function DataManager() {
         navegador o dispositivo, exporta una copia aquí e impórtala allí.
       </p>
       <dl className="kv">
-        <dt>Fondos importados en Mi cartera</dt><dd>{now.funds} ({now.lots} lotes)</dd>
+        <dt>Fondos importados en Mi cartera</dt><dd>{now.funds} ({now.lots} lotes){now.folios > 1 ? ` en ${now.folios} carteras` : ''}</dd>
         <dt>Carteras simuladas</dt><dd>{now.sims}</dd>
       </dl>
 
       <section>
         <h3>Exportar</h3>
-        <p className="small muted">Descarga un archivo <code>.json</code> con tu cartera, tus carteras simuladas y tus preferencias. Contiene tus importes: guárdalo en un lugar seguro.</p>
+        <p className="small muted">Descarga un archivo <code>.json</code> con tu cartera, tus carteras simuladas, los productos buscados por ISIN y tus preferencias. Contiene tus importes: guárdalo en un lugar seguro.</p>
         <div className="detail-actions">
           <button className="btn btn-primary" onClick={() => { downloadBackup(); setExported(true); }} disabled={empty}>Descargar copia</button>
           {exported && <span className="small added" role="status">Copia descargada.</span>}
@@ -86,8 +86,9 @@ export function DataManager() {
         <div className="warning" role="note">
           <p><strong>⚠️ Esta acción no se puede deshacer.</strong> Se eliminarán de este navegador:</p>
           <ul>
-            <li>Tu cartera importada ({now.funds} fondos, {now.lots} lotes) y los nombres y datos de fondos identificados.</li>
+            <li>{now.folios > 1 ? `Tus ${now.folios} carteras importadas` : 'Tu cartera importada'} ({now.funds} fondos, {now.lots} lotes) y los nombres y datos de fondos identificados.</li>
             <li>Todas tus carteras simuladas ({now.sims}).</li>
+            <li>Los productos que buscaste por ISIN fuera del catálogo.</li>
             <li>Tus preferencias (tema).</li>
           </ul>
           <p>

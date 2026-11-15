@@ -1,4 +1,4 @@
-export type ProductType = 'fondo' | 'etf' | 'plan';
+export type ProductType = 'fondo' | 'etf' | 'plan' | 'alt';
 
 export interface Product {
   id: string;
@@ -23,6 +23,14 @@ export interface Product {
   currency?: string | null;
   ticker?: string | null;
   degiroExchange?: string | null;
+  // cripto y materias primas (curated: ETN / ETC / ETF UCITS)
+  structure?: 'ETN' | 'ETC' | 'ETF UCITS';
+  backing?: string; // "Física" | "Sintética (swap)"
+  exchange?: string | null;
+  note?: string | null;
+  curated?: boolean; // added by Invertario, not in the community sheet
+  /** Looked up by ISIN outside the catalog (stored only in this browser). */
+  external?: { source: string; url: string | null; domicile: string | null; checkedAt: string };
   // planes de pensiones
   provider?: string;
   dgsCode?: string | null;

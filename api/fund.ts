@@ -38,11 +38,14 @@ export function parseFtTearsheet(isin: string, html: string, url: string): FundI
     return m ? Number(m[1]) : null;
   };
   const category = fields.get('morningstar category') || null;
+  // ETF tearsheets often lack a category: their style box says whether the fund holds stocks or bonds.
+  const style = (k: string) => (fields.get(k) ?? '--') !== '--';
+  const styleClass = style('investment style (stocks)') ? 'Renta Variable' : style('investment style (bonds)') ? 'Renta Fija' : null;
   return {
     isin,
     name: decode(name),
     category: category && category !== '--' ? category : null,
-    assetClass: classify(category),
+    assetClass: classify(category) ?? styleClass,
     ongoingCharge: pct(fields.get('ongoing charge')) ?? pct(fields.get('net expense ratio')),
     domicile: fields.get('domicile') || null,
     source: 'FT.com',
@@ -50,12 +53,32 @@ export function parseFtTearsheet(isin: string, html: string, url: string): FundI
   };
 }
 
-async function fromFt(isin: string): Promise<FundInfo | null> {
+/** Exchange-traded products (ETFs, ETCs) are keyed by ticker on FT: find one via FT's search, preferring a euro listing. */
+async function ftEtfUrl(isin: string): Promise<string | null> {
+  const res = await fetch(`https://markets.ft.com/data/search?query=${isin}`, { headers: { 'User-Agent': UA } });
+  if (!res.ok) return null;
+  const symbols = [...new Set([...(await res.text()).matchAll(/\/data\/etfs\/tearsheet\/summary\?s=([A-Za-z0-9.]+:[A-Z]+:[A-Z]{3})/g)].map((m) => m[1]))];
+  const rank = (s: string) => (s.endsWith(':GER:EUR') ? 0 : s.endsWith(':EUR') ? 1 : 2);
+  const best = symbols.sort((a, b) => rank(a) - rank(b))[0];
+  return best ? `https://markets.ft.com/data/etfs/tearsheet/summary?s=${best}` : null;
+}
+
+/** FT tearsheet pages for an ISIN: fund share classes by currency, then the exchange-traded listing. */
+async function* ftPages(isin: string): AsyncGenerator<{ url: string; html: string }> {
   for (const ccy of ['EUR', 'USD', 'GBP']) {
     const url = `https://markets.ft.com/data/funds/tearsheet/summary?s=${isin}:${ccy}`;
     const res = await fetch(url, { headers: { 'User-Agent': UA }, redirect: 'manual' });
-    if (res.status !== 200) continue;
-    const info = parseFtTearsheet(isin, await res.text(), url);
+    if (res.status === 200) yield { url, html: await res.text() };
+  }
+  const url = await ftEtfUrl(isin).catch(() => null);
+  if (!url) return;
+  const res = await fetch(url, { headers: { 'User-Agent': UA }, redirect: 'manual' });
+  if (res.status === 200) yield { url, html: await res.text() };
+}
+
+async function fromFt(isin: string): Promise<FundInfo | null> {
+  for await (const { url, html } of ftPages(isin)) {
+    const info = parseFtTearsheet(isin, html, url);
     if (info) return info;
   }
   return null;
@@ -124,11 +147,10 @@ async function navOnOrBefore(xid: string, since: string): Promise<NavPoint | nul
 }
 
 export async function lookupPrices(isin: string, since: string | null): Promise<PriceInfo | null> {
-  for (const ccy of ['EUR', 'USD', 'GBP']) {
-    const res = await fetch(`https://markets.ft.com/data/funds/tearsheet/summary?s=${isin}:${ccy}`, { headers: { 'User-Agent': UA }, redirect: 'manual' });
-    if (res.status !== 200) continue;
-    const html = await res.text();
-    const price = Number(/Price \(([A-Z]{3})\)[\s\S]{0,200}?mod-ui-data-list__value">([\d.,]+)/.exec(html)?.[2]?.replace(/,/g, ''));
+  for await (const { html } of ftPages(isin)) {
+    const m = /Price \(([A-Z]{3})\)[\s\S]{0,200}?mod-ui-data-list__value">([\d.,]+)/.exec(html);
+    const ccy = m?.[1] ?? '';
+    const price = Number(m?.[2]?.replace(/,/g, ''));
     const date = ftDate(/as of ([A-Z][a-z]{2} \d{1,2} \d{4})/.exec(html)?.[1] ?? '');
     if (!Number.isFinite(price) || !date) continue;
     const xid = /&quot;xid&quot;:&quot;(\d+)&quot;/.exec(html)?.[1];

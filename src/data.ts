@@ -13,7 +13,7 @@ export function isNew(p: Product, now = Date.now()) {
 export const byIsin = new Map(catalog.items.filter((p) => p.isin).map((p) => [p.isin!, p]));
 
 export function productLink(p: Product) {
-  if (p.type === 'etf') return `https://www.justetf.com/es/etf-profile.html?isin=${p.isin}`;
+  if (p.type === 'etf' || p.type === 'alt') return `https://www.justetf.com/es/etf-profile.html?isin=${p.isin}`;
   if (p.type === 'plan') return null;
   if (p.morningstarId) return `https://www.morningstar.es/es/funds/snapshot/snapshot.aspx?id=${p.morningstarId}`;
   return `https://www.morningstar.es/es/funds/SecuritySearchResults.aspx?search=${p.isin}`;
