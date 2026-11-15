@@ -1,45 +1,194 @@
-# Invertario
+<div align="center">
 
-Web sencilla para consultar fondos indexados, ETFs y planes de pensiones disponibles en plataformas españolas, y para hacer seguimiento privado de tu cartera.
+# 📈 Invertario
 
-## Funcionalidades
+**Encuentra el fondo indexado más barato, simula tu cartera y sigue la que ya tienes.**
 
-- **Catálogo**: datos de la [hoja de cálculo mantenida por la comunidad](https://docs.google.com/spreadsheets/d/1qTBkH0K5zE-e5OXsUo6Prmo2QGmYNWf63Y-iLQqdBaA). Búsqueda, filtros por tipo de activo, región/plazo y plataforma, orden por coste y rentabilidad.
-- **Cripto y materias primas**: pestaña con ETN de bitcoin/ethereum, ETC de oro, plata, platino y paladio, y ETF/ETC de materias primas y petróleo. No están en la hoja comunitaria: es una lista curada en `scripts/alternatives.json` (ISIN, coste, estructura, respaldo, ticker y bolsa, verificados en justETF) que el sync añade al catálogo. El mismo archivo añade a la pestaña ETFs monetarios (€STR) e inmobiliarios (REIT), que la hoja no incluye (`curated: true`). Sin datos de plataformas. El simulador usa hipótesis propias (cripto 5 %, metales 4 %, materias primas 3 % al año; volatilidad 70 %, 16 % y 20 %).
-- **Productos nuevos**: cada producto guarda la fecha en que apareció por primera vez en la hoja (`addedAt`). Se marca como «Nuevo» durante 30 días (`NEW_DAYS` en `src/data.ts`).
-- **Simulador**: crea carteras simuladas con fondos del catálogo (desde su ficha o con el buscador) y proyecta su valor con interés compuesto: capital inicial, aportación mensual con subida anual, plazo, inflación, objetivo, costes reales de cada fondo e hipótesis de rentabilidad (prudente, histórica 5 años o personalizada), con escenarios favorable/desfavorable, tabla anual y exportación CSV. Se guardan solo en el navegador.
-- **Mi cartera**: importa los CSV de plusvalías/minusvalías (uno por fondo, con el ISIN en el nombre del archivo). Todo se procesa y guarda en el navegador (`localStorage`); no hay backend ni se envía nada a ningún servidor.
+Fondos indexados, ETFs, planes de pensiones y productos alternativos disponibles en España,
+con sus costes reales y dónde contratarlos. Sin registro y sin que tus datos salgan del navegador.
 
-- **Fondos no catalogados**: al importar un CSV de un fondo que no está en el catálogo, la web consulta automáticamente `GET /api/fund?isin=…` (función serverless en `api/`, que lee la ficha pública de FT.com y, si no la encuentra, OpenFIGI) para obtener nombre, categoría, gastos corrientes y tipo de activo. Solo se envía el ISIN; el resultado se guarda en el navegador. Los ETF y ETC se buscan en FT.com por su cotización en bolsa (preferiblemente en euros), así que también tienen coste y precio.
-- **ISIN fuera del catálogo**: si buscas en el catálogo o en el simulador un ISIN que no está, el botón «Buscar este ISIN fuera del catálogo» lo consulta en la misma función y crea una ficha «No catalogado» (coste, categoría, domicilio) que se puede comparar y añadir al simulador. Se guarda solo en el navegador y entra en la copia de seguridad.
+[**invertario.vercel.app**](https://invertario.vercel.app) · Vite + React + TypeScript · Datos actualizados cada día
 
-- **Varias carteras**: «+ Cartera» crea otra cartera independiente (pestañas, renombrar, eliminar); cada una con sus CSV. Se guardan en `invertario.portfolios.v1` (migra la cartera única anterior) y entran en la copia de seguridad.
-- **Reimportar sin duplicar**: si se importan a la vez varias versiones del mismo fondo (p. ej. «… 2.csv»), se usa la más reciente (fecha del archivo, luego último lote); un CSV más antiguo que el importado se ignora. La fecha de descarga del archivo se usa como fecha de valoración del CSV.
-- **Traspasos**: un fondo cuyas aportaciones (fecha fiscal e importe) reaparecen todas en otro fondo exportado después se trata como traspasado: sale de los totales y la tarjeta «Traspasos detectados» compara lo que valen hoy esos lotes en el fondo nuevo con lo que valdrían si siguieran en el de origen (su valor del CSV movido con su valor liquidativo). Botón «No es un traspaso» para descartarlo.
-- **Valores actualizados**: el CSV es una foto del día en que se descargó. Al abrir Mi cartera (como mucho cada 6 h) o con «Actualizar valores», cada fondo se revalora con su valor liquidativo: `valor hoy = valor del CSV × VL actual / VL del día anterior a la importación` (`GET /api/fund?isin=…&since=AAAA-MM-DD`, datos de FT.com). Solo se envían el ISIN y esa fecha.
-- **Tus datos** (botón ⇅ de la cabecera o enlace del pie): exporta todo lo guardado en el navegador (cartera, carteras simuladas, tema) a un `.json`, impórtalo en otro navegador (combinando o reemplazando) o bórralo todo, con aviso de que no se puede recuperar sin copia.
+</div>
 
-## Actualización diaria
+![Catálogo de Invertario](docs/screenshots/catalogo.png)
 
-`.github/workflows/sync-funds.yml` se ejecuta cada día (05:30 UTC) y también manualmente desde la pestaña *Actions*:
+---
 
-1. `scripts/sync-funds.mjs` descarga las pestañas *Fondos*, *ETFs* y *Planes pensiones* como CSV y añade los productos de `scripts/alternatives.json`.
-2. Genera `src/data/funds.json`, conservando `addedAt` de los productos ya conocidos y poniendo la fecha de hoy a los nuevos.
-3. Si hay cambios, hace commit y push → Vercel redespliega automáticamente.
+## Índice
 
-En la primera sincronización todos los productos tienen `addedAt: null` (no se marcan como nuevos).
+- [Qué puedes hacer](#qué-puedes-hacer)
+  - [Catálogo](#-catálogo)
+  - [Ficha y comparador](#-ficha-y-comparador)
+  - [Cripto y materias primas](#-cripto-y-materias-primas)
+  - [Simulador](#-simulador)
+  - [Mi cartera](#-mi-cartera)
+- [Privacidad](#-privacidad)
+- [Cómo funciona por dentro](#cómo-funciona-por-dentro)
+- [Desarrollo](#desarrollo)
+- [Despliegue](#despliegue)
+
+---
+
+## Qué puedes hacer
+
+### 🔎 Catálogo
+
+Todos los productos de la [hoja de cálculo mantenida por la comunidad](https://docs.google.com/spreadsheets/d/1qTBkH0K5zE-e5OXsUo6Prmo2QGmYNWf63Y-iLQqdBaA), en pestañas: **fondos indexados**, **ETFs**, **planes de pensiones** y **cripto y materias primas**.
+
+- **Los más baratos de cada categoría** de un vistazo, arriba de todo.
+- **Búsqueda** por nombre, ISIN, índice o ticker, y **filtros** por tipo de activo, región/plazo y plataforma.
+- **Orden** por coste total o rentabilidad a 3 y 5 años.
+- **Productos nuevos** marcados durante 30 días desde que aparecen en la hoja.
+- **ISIN fuera del catálogo**: si buscas un ISIN que no está, el botón *«Buscar este ISIN fuera del catálogo»* crea una ficha **«No catalogado»** con su coste, categoría y domicilio. Puedes compararla y usarla en el simulador como cualquier otra.
+
+Los filtros viven en la URL, así que cualquier búsqueda se puede compartir con un enlace.
+
+### 📋 Ficha y comparador
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/ficha.png" alt="Ficha de un fondo"></td>
+<td width="50%"><img src="docs/screenshots/comparar.png" alt="Comparador de fondos"></td>
+</tr>
+<tr>
+<td><b>Ficha</b>: desglose de costes (TER + costes operativos), plataformas donde contratarlo, préstamo de valores y otros productos que replican el mismo índice, del más barato al más caro.</td>
+<td><b>Comparador</b>: hasta 3 productos lado a lado. Resalta el más barato y el de mejor rentabilidad, y muestra en qué plataformas está cada uno.</td>
+</tr>
+</table>
+
+### 🪙 Cripto y materias primas
+
+![Pestaña de cripto y materias primas](docs/screenshots/cripto-materias-primas.png)
+
+Una lista seleccionada de **ETN de bitcoin y ethereum**, **ETC de oro, plata, platino y paladio** y **ETF/ETC de materias primas y petróleo**. Para cada uno: coste, estructura (ETN, ETC o ETF UCITS), respaldo (físico o sintético), ticker y bolsa.
+
+Se muestra un aviso de riesgo: no generan rentas, pueden caer más de un 50 %, no admiten traspasos sin tributar y los ETN/ETC tienen riesgo de emisor.
+
+La pestaña de ETFs suma también **ETFs monetarios** (€STR) e **inmobiliarios** (REIT), que no están en la hoja comunitaria.
+
+### 🧮 Simulador
+
+![Simulador de carteras](docs/screenshots/simulador.png)
+
+Crea carteras simuladas desde cero, con una plantilla o con *«+ Simulador»* desde el catálogo, y proyecta cuánto podrían valer:
+
+- Capital inicial, **aportación mensual** con subida anual, plazo, inflación y objetivo.
+- **Costes reales de cada fondo** descontados de la rentabilidad.
+- Hipótesis **prudente**, **histórica a 5 años** o **personalizada**, con escenarios favorable y desfavorable.
+- Composición **por fondo** y **por tipo de activo** (renta variable, renta fija, materias primas, cripto).
+- Tabla año a año, **exportación a CSV** y **enlace para compartir** la cartera.
+
+### 💼 Mi cartera
+
+![Mi cartera](docs/screenshots/mi-cartera.png)
+
+Importa los CSV de **plusvalías y minusvalías** que descargas de tu bróker (uno por fondo, con el ISIN en el nombre del archivo). Arrástralos a la página o usa *«+ Añadir CSV»*.
+
+- **Resumen**: valor de mercado, invertido, resultado y coste medio ponderado.
+- **Aportado frente a valor**: gráfico con tu historial y una proyección a 20 años.
+- **Posiciones**: cada fondo con sus lotes, su tipo de activo, sus plataformas y una alternativa más barata si existe.
+- **Valores al día**: el CSV es una foto del día en que lo descargaste. Cada fondo se revalora con su último valor liquidativo.
+- **Varias carteras**: *«+ Cartera»* crea otra independiente, por ejemplo la de otra persona o la de otro bróker. Se gestionan con pestañas: cambiar, renombrar o borrar con la ✕.
+- **Reimportar sin duplicar**: si subes a la vez *«fondo X.csv»* y *«fondo X 2.csv»*, se queda la versión más reciente.
+- **Traspasos**: si las aportaciones de un fondo reaparecen en otro, se detecta el traspaso. El fondo de origen sale de los totales y una tarjeta estima cuánto has ganado o perdido respecto a no haber traspasado.
+
+<div align="center">
+<img src="docs/screenshots/movil-oscuro.png" alt="Invertario en el móvil con tema oscuro" width="320">
+<br><sub>Diseñada también para el móvil, con tema claro y oscuro.</sub>
+</div>
+
+---
+
+## 🔒 Privacidad
+
+> **Invertario no tiene cuentas ni base de datos.** Tus carteras, simulaciones y preferencias se guardan **solo en tu navegador** (`localStorage`).
+
+- Para identificar un fondo y actualizar su valor se consulta **solo su ISIN** (y una fecha) a la función propia `/api/fund`, que lee datos públicos de FT.com u OpenFIGI. Nunca se envían importes, movimientos ni nombres de archivo.
+- Desde **⇅ Tus datos** puedes exportar todo a un `.json`, importarlo en otro navegador (combinando o reemplazando) o borrarlo todo.
+
+---
+
+## Cómo funciona por dentro
+
+### Datos y actualización diaria
+
+`.github/workflows/sync-funds.yml` se ejecuta cada día a las 05:30 UTC (y a mano desde *Actions*):
+
+1. `scripts/sync-funds.mjs` descarga como CSV las pestañas *Fondos*, *ETFs* y *Planes pensiones* de la hoja comunitaria y añade los productos curados de `scripts/alternatives.json`. Si un ISIN está en ambos sitios, gana la hoja.
+2. Genera `src/data/funds.json`. Conserva `addedAt` de los productos conocidos y pone la fecha de hoy a los nuevos. «Nuevo» dura 30 días (`NEW_DAYS` en `src/data.ts`).
+3. Si hay cambios, hace commit y push, y Vercel redespliega solo.
+
+### Productos curados
+
+`scripts/alternatives.json` contiene ISIN, coste, estructura, respaldo, ticker y bolsa, verificados en justETF:
+
+- Con tipo `alt`: cripto, metales y materias primas.
+- Con `"type": "etf"` y `curated: true`: ETFs monetarios e inmobiliarios.
+
+Estos productos no tienen datos de plataformas.
+
+El simulador usa estas hipótesis propias para ellos:
+
+| Producto | Rentabilidad anual | Volatilidad |
+|---|---|---|
+| Cripto | 5 % | 70 % |
+| Metales | 4 % | 16 % |
+| Materias primas | 3 % | 20 % |
+
+### API `/api/fund`
+
+Función serverless en `api/fund.ts`:
+
+| Petición | Respuesta |
+|---|---|
+| `GET /api/fund?isin=XX…` | Nombre, categoría, tipo de activo, gastos corrientes y domicilio (FT.com; si no lo encuentra, OpenFIGI). Los ETF y ETC se buscan por su cotización en bolsa, preferiblemente en euros. |
+| `GET /api/fund?isin=XX…&since=AAAA-MM-DD` | Valor liquidativo actual y el del día indicado o anterior. |
+
+La revaloración de Mi cartera es:
+
+```
+valor hoy = valor del CSV × VL actual / VL del día anterior a la importación
+```
+
+Solo se aplica con precios en euros. Si un producto solo tiene precio en otra moneda, se mantiene el valor del CSV para no mezclar el efecto del tipo de cambio.
+
+### Traspasos
+
+Un fondo cuyas aportaciones (fecha fiscal e importe) aparecen todas en otro fondo exportado después se considera traspasado.
+
+La tarjeta compara dos valores:
+- lo que valen hoy esos lotes en el fondo nuevo;
+- lo que valdrían si siguieran en el de origen.
+
+Es una **estimación**: los CSV no incluyen participaciones ni el valor liquidativo con el que se valoraron, así que la cifra puede desviarse unos euros. El dato exacto está en las órdenes del traspaso del bróker.
+
+### Claves de almacenamiento
+
+| Clave | Contenido |
+|---|---|
+| `invertario.portfolios.v1` | Carteras importadas (migra la antigua `invertario.portfolio.v1`) |
+| `invertario.external.v1` | Productos buscados fuera del catálogo |
+| `invertario.sims.v1` | Carteras simuladas |
+| `invertario.theme` | Tema claro u oscuro |
+
+Todo entra en la copia de seguridad de *Tus datos*.
+
+---
 
 ## Desarrollo
 
 ```bash
 npm install
 npm run dev     # http://localhost:5173
-npm run sync    # sincroniza los datos manualmente
+npm run sync    # sincroniza los datos a mano
 npm run build
 ```
 
-## Despliegue en Vercel
+Las capturas de este README están en `docs/screenshots/` y se hicieron con **datos inventados**.
 
-Importa el repositorio en Vercel; detecta Vite automáticamente (build `npm run build`, salida `dist`). No requiere variables de entorno.
+## Despliegue
 
-En GitHub, el workflow necesita permiso de escritura: *Settings → Actions → General → Workflow permissions → Read and write permissions*.
+Importa el repositorio en Vercel. Detecta Vite solo (build `npm run build`, salida `dist`) y no requiere variables de entorno.
+
+Para que el workflow pueda hacer push, en GitHub ve a *Settings → Actions → General → Workflow permissions* y activa **Read and write permissions**.
