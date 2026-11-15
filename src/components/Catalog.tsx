@@ -354,9 +354,11 @@ function IsinLookup({ isin, onOpen }: { isin: string; onOpen: (p: Product) => vo
       <div className="empty isin-lookup">
         <p className="small muted">No está en el catálogo. Ya lo buscaste antes:</p>
         <button className="pick" onClick={() => onOpen(external)}>
-          <span className="pick-cat"><AssetTag p={external} /> {external.region ?? 'Sin categoría'}</span>
+          <span className="pick-cat"><AssetTag p={external} /> {external.type === 'accion' ? 'Cotiza en bolsa' : external.region ?? 'Sin categoría'}</span>
           <span className="pick-name">{external.name}</span>
-          <span className="pick-cost">{external.totalCost != null ? fmtPct(external.totalCost) : '—'}<span className="muted small"> gastos corrientes</span></span>
+          {external.type === 'accion'
+            ? <span className="pick-cost"><span className="muted small">Sin comisión de gestión</span></span>
+            : <span className="pick-cost">{external.totalCost != null ? fmtPct(external.totalCost) : '—'}<span className="muted small"> gastos corrientes</span></span>}
           <span className="badge-ext">No catalogado</span>
         </button>
       </div>

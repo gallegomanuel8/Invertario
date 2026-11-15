@@ -44,6 +44,11 @@ Todos los productos de la [hoja de cálculo mantenida por la comunidad](https://
 
 Los filtros viven en la URL, así que cualquier búsqueda se puede compartir con un enlace.
 
+<div align="center">
+<img src="docs/screenshots/accion.png" alt="Ficha de una acción buscada por ISIN, con su cotización a 5 años" width="720">
+<br><sub>Una acción buscada por su ISIN: cotización en euros y evolución a 1, 3 y 5 años.</sub>
+</div>
+
 ### 📋 Ficha y comparador
 
 <table>

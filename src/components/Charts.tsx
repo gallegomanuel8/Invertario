@@ -323,7 +323,7 @@ export function PriceChart({ points, currency, label }: { points: PricePoint[]; 
   const path = points.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.price).toFixed(1)}`).join(' ');
   const area = `${path} L${x(t1)},${H - pad.b} L${x(t0)},${H - pad.b} Z`;
   // Round tick values (1, 2, 2.5 or 5 × 10^n) inside the plotted range.
-  const raw = (max - min) / 4, mag = 10 ** Math.floor(Math.log10(raw));
+  const raw = (max - min) / 5, mag = 10 ** Math.floor(Math.log10(raw));
   const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((v) => v >= raw)!;
   const ticks: number[] = [];
   for (let v = Math.ceil(min / step) * step; v <= max; v += step) ticks.push(v);
