@@ -186,12 +186,15 @@ function fetchHistory(isin: string): Promise<History | null> {
   return h;
 }
 
-const RANGES = [{ id: 1, label: '1 año' }, { id: 3, label: '3 años' }, { id: 5, label: '5 años' }] as const;
+// Range in months.
+const RANGES = [{ id: 1, label: '1 mes' }, { id: 12, label: '1 año' }, { id: 36, label: '3 años' }, { id: 60, label: '5 años' }] as const;
+type Range = (typeof RANGES)[number]['id'];
+const RANGE_TEXT: Record<Range, string> = { 1: 'el último mes', 12: 'el último año', 36: 'los últimos 3 años', 60: 'los últimos 5 años' };
 
-/** Weekly price over the last 1/3/5 years (FT.com). Sends only the ISIN. */
+/** Price over the last month (daily) or 1/3/5 years (weekly), from FT.com. Sends only the ISIN. */
 function PriceHistory({ isin, type }: { isin: string; type: Product['type'] }) {
   const [state, setState] = useState<{ status: 'loading' | 'ok' | 'none' | 'error'; data?: History }>({ status: 'loading' });
-  const [years, setYears] = useState<1 | 3 | 5>(5);
+  const [months, setMonths] = useState<Range>(60);
   useEffect(() => {
     let live = true;
     fetchHistory(isin).then(
@@ -203,15 +206,15 @@ function PriceHistory({ isin, type }: { isin: string; type: Product['type'] }) {
 
   const points = useMemo(() => {
     if (!state.data) return [];
-    const from = Date.now() - years * 365.25 * 86_400_000;
+    const from = Date.now() - (months / 12) * 365.25 * 86_400_000;
     return state.data.points.map(([d, price]) => ({ t: new Date(d).getTime(), price })).filter((p) => p.t >= from);
-  }, [state.data, years]);
+  }, [state.data, months]);
   const spanYears = points.length > 1 ? (points.at(-1)!.t - points[0].t) / (365.25 * 86_400_000) : 0;
   const change = points.length > 1 ? (points.at(-1)!.price / points[0].price - 1) * 100 : 0;
   const annual = spanYears >= 1.5 ? (Math.pow(points.at(-1)!.price / points[0].price, 1 / spanYears) - 1) * 100 : null;
   const maxYears = state.data ? Math.ceil((Date.now() - new Date(state.data.points[0][0]).getTime()) / (365.25 * 86_400_000) - 0.05) : 5;
   const unit = type === 'fondo' ? 'del valor liquidativo' : 'de la cotización';
-  const ranges = RANGES.filter((r) => r.id === 1 || r.id <= maxYears + 0.5);
+  const ranges = RANGES.filter((r) => r.id <= 12 || r.id / 12 <= maxYears + 0.5);
 
   if (state.status === 'none') return null;
   return (
@@ -221,7 +224,7 @@ function PriceHistory({ isin, type }: { isin: string; type: Product['type'] }) {
         {state.status === 'ok' && ranges.length > 1 && (
           <div className="segmented small-seg" role="radiogroup" aria-label="Periodo">
             {ranges.map((r) => (
-              <button key={r.id} role="radio" aria-checked={years === r.id} aria-selected={years === r.id} onClick={() => setYears(r.id)}>{r.label}</button>
+              <button key={r.id} role="radio" aria-checked={months === r.id} aria-selected={months === r.id} onClick={() => setMonths(r.id)}>{r.label}</button>
             ))}
           </div>
         )}
@@ -232,12 +235,12 @@ function PriceHistory({ isin, type }: { isin: string; type: Product['type'] }) {
         <>
           <p className="small">
             <strong className={change >= 0 ? 'pos' : 'neg'}>{change >= 0 ? '▲ +' : '▼ '}{change.toLocaleString('es-ES', { maximumFractionDigits: 1 })} %</strong>
-            {' '}desde {new Intl.DateTimeFormat('es-ES', { month: 'short', year: 'numeric' }).format(points[0].t)}
+            {' '}desde {new Intl.DateTimeFormat('es-ES', months === 1 ? { day: 'numeric', month: 'short' } : { month: 'short', year: 'numeric' }).format(points[0].t)}
             {annual != null && <span className="muted"> · {annual.toLocaleString('es-ES', { maximumFractionDigits: 1 })} % anual</span>}
           </p>
-          <PriceChart points={points} currency={state.data!.currency} label={`Evolución ${unit} en ${years === 1 ? 'el último año' : `los últimos ${years} años`}`} />
+          <PriceChart points={points} currency={state.data!.currency} daily={months === 1} label={`Evolución ${unit} en ${RANGE_TEXT[months]}`} />
           <p className="muted small">
-            Precio semanal en {state.data!.currency} de <a href={state.data!.source} target="_blank" rel="noreferrer">FT.com ↗</a>
+            Precio {months === 1 ? 'diario' : 'semanal'} en {state.data!.currency} de <a href={state.data!.source} target="_blank" rel="noreferrer">FT.com ↗</a>
             {type === 'fondo' || type === 'etf' ? '. Ya descuenta los gastos del fondo; rentabilidades pasadas no garantizan las futuras.' : '. Rentabilidades pasadas no garantizan las futuras.'}
             {state.data!.currency !== 'EUR' && ' En otra divisa: no incluye el efecto del tipo de cambio para un inversor en euros.'}
           </p>

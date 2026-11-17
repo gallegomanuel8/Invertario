@@ -46,7 +46,7 @@ Los filtros viven en la URL, así que cualquier búsqueda se puede compartir con
 
 <div align="center">
 <img src="docs/screenshots/accion.png" alt="Ficha de una acción buscada por ISIN, con su cotización a 5 años" width="720">
-<br><sub>Una acción buscada por su ISIN: cotización en euros y evolución a 1, 3 y 5 años.</sub>
+<br><sub>Una acción buscada por su ISIN: cotización en euros y evolución a 1 mes y a 1, 3 y 5 años.</sub>
 </div>
 
 ### 📋 Ficha y comparador
@@ -57,7 +57,7 @@ Los filtros viven en la URL, así que cualquier búsqueda se puede compartir con
 <td width="50%"><img src="docs/screenshots/comparar.png" alt="Comparador de fondos"></td>
 </tr>
 <tr>
-<td><b>Ficha</b>: evolución del valor liquidativo o la cotización a 1, 3 y 5 años (semanal, de FT.com), desglose de costes (TER + costes operativos), plataformas donde contratarlo, préstamo de valores y otros productos que replican el mismo índice, del más barato al más caro.</td>
+<td><b>Ficha</b>: evolución del valor liquidativo o la cotización a 1 mes (diaria) y a 1, 3 y 5 años (semanal), de FT.com, desglose de costes (TER + costes operativos), plataformas donde contratarlo, préstamo de valores y otros productos que replican el mismo índice, del más barato al más caro.</td>
 <td><b>Comparador</b>: hasta 3 productos lado a lado. Resalta el más barato y el de mejor rentabilidad, y muestra en qué plataformas está cada uno.</td>
 </tr>
 </table>
@@ -149,7 +149,7 @@ Función serverless en `api/fund.ts`:
 |---|---|
 | `GET /api/fund?isin=XX…` | Nombre, categoría, tipo de activo, gastos corrientes y domicilio (FT.com; si no lo encuentra, OpenFIGI). Los ETF y ETC se buscan por su cotización en bolsa, preferiblemente en euros. |
 | `GET /api/fund?isin=XX…&since=AAAA-MM-DD` | Valor liquidativo actual y el del día indicado o anterior. |
-| `GET /api/fund?isin=XX…&history=5y` | Cierre semanal de los últimos años, para el gráfico de la ficha. |
+| `GET /api/fund?isin=XX…&history=5y` | Cierre semanal de los últimos años (diario en las últimas 6 semanas), para el gráfico de la ficha. |
 
 Las **acciones** se reconocen con OpenFIGI (tipo de valor) y su cotización se toma de FT.com, priorizando Xetra y las bolsas de la zona euro. La búsqueda de FT es de texto libre, así que un ETF solo se acepta si su ficha muestra el ISIN y una acción solo si el nombre coincide con el de OpenFIGI.
 

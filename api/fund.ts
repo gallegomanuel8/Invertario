@@ -240,7 +240,7 @@ export async function lookupPrices(isin: string, since: string | null): Promise<
 
 export interface PriceHistory { isin: string; currency: string; source: string; points: [string, number][] } // [YYYY-MM-DD, close]
 
-/** Weekly closes (last trading day of each week) for the last `years`, from FT's historical prices. */
+/** Closes for the last `years` from FT's historical prices: daily for the last 6 weeks (1-month chart), weekly before. */
 export async function lookupHistory(isin: string, years: number): Promise<PriceHistory | null> {
   for await (const { url, html } of ftPages(isin)) {
     const ccy = /Price \(([A-Z]{3})\)/.exec(html)?.[1];
@@ -259,9 +259,10 @@ export async function lookupHistory(isin: string, years: number): Promise<PriceH
     }
     if (daily.length < 2) continue;
     daily.sort((a, b) => a[0].localeCompare(b[0]));
-    // One point per ISO week keeps 5 years at ~260 points.
+    // One point per ISO week keeps 5 years at ~260 points; the last 6 weeks stay daily (~30 more).
     const week = (d: string) => { const t = new Date(d); t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7)); return t.toISOString().slice(0, 10); };
-    const points = daily.filter((p, i) => i === daily.length - 1 || week(daily[i + 1][0]) !== week(p[0]));
+    const recent = new Date(Date.now() - 42 * 86_400_000).toISOString().slice(0, 10);
+    const points = daily.filter((p, i) => p[0] >= recent || i === daily.length - 1 || week(daily[i + 1][0]) !== week(p[0]));
     return { isin, currency: ccy, source: url, points };
   }
   return null;
@@ -278,7 +279,7 @@ export async function handle(url: URL): Promise<Response> {
       headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...(cache === 'no-store' ? {} : { 'Vercel-CDN-Cache-Control': cache }) },
     });
   if (!ISIN_RE.test(isin)) return json({ error: 'ISIN no válido' }, 400, 'no-store');
-  // ?history=5y → weekly closes for the price chart in the product page.
+  // ?history=5y → closes (weekly, daily for the last weeks) for the price chart in the product page.
   const history = url.searchParams.get('history');
   if (history !== null) {
     const years = Number(/^(\d{1,2})y$/.exec(history)?.[1]);
